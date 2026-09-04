@@ -1,0 +1,19 @@
+# Python
+backend/venv/
+**/__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Bases de datos y copias de seguridad — datos reales de empresas, terceros y NNA
+*.db
+*.db-journal
+backend/backups/
+
+# Entorno / secretos
+.env
+
+# Editor / SO
+.DS_Store
