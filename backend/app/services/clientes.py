@@ -3,6 +3,7 @@ from sqlalchemy import or_, func
 from app.models.clientes_proveedores import Cliente
 from app.models.contabilidad import Cuenta
 from app.schemas.clientes_proveedores import ClienteCreate, ClienteUpdate
+from app.services.sync import registrar_operacion
 
 
 def _cuenta_cliente(db: Session, empresa_id: int, numero: int) -> str:
@@ -57,6 +58,8 @@ def create_cliente(db: Session, data: ClienteCreate) -> Cliente:
     if not existe:
         db.add(Cuenta(empresa_id=data.empresa_id, cuenta=cliente.cuenta, texto=(data.nombre or "").strip()))
 
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'clientes', cliente.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(cliente)
     return cliente
@@ -66,8 +69,11 @@ def update_cliente(db: Session, cliente_id: int, data: ClienteUpdate) -> Cliente
     cliente = get_cliente(db, cliente_id)
     if not cliente:
         return None
+    cliente.version = (cliente.version or 1) + 1
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(cliente, campo, valor)
+    registrar_operacion(db, cliente.empresa_id, 'clientes', cliente.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(cliente)
     return cliente
@@ -77,6 +83,8 @@ def delete_cliente(db: Session, cliente_id: int) -> bool:
     cliente = get_cliente(db, cliente_id)
     if not cliente:
         return False
+    entidad_uuid, empresa_id = cliente.uuid, cliente.empresa_id
     db.delete(cliente)
+    registrar_operacion(db, empresa_id, 'clientes', entidad_uuid, 'D')
     db.commit()
     return True

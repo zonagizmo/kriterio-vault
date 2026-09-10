@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, or_
 from app.models.contabilidad import Cuenta, Diario
 from app.schemas.contabilidad import CuentaCreate, CuentaUpdate, AsientoCreate
+from app.services.sync import registrar_operacion
 import datetime
 
 
@@ -64,6 +65,8 @@ def get_cuenta(db: Session, cuenta_id: int):
 def create_cuenta(db: Session, data: CuentaCreate) -> Cuenta:
     c = Cuenta(**data.model_dump())
     db.add(c)
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'cuentas', c.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(c)
     return c
@@ -73,8 +76,11 @@ def update_cuenta(db: Session, cuenta_id: int, data: CuentaUpdate) -> Cuenta | N
     c = get_cuenta(db, cuenta_id)
     if not c:
         return None
+    c.version = (c.version or 1) + 1
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(c, k, v)
+    registrar_operacion(db, c.empresa_id, 'cuentas', c.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(c)
     return c
@@ -92,7 +98,9 @@ def delete_cuenta(db: Session, cuenta_id: int) -> bool:
         raise ValueError(
             f"No se puede eliminar la cuenta {c.cuenta}: tiene {n_apuntes} apuntes en el diario."
         )
+    entidad_uuid, empresa_id = c.uuid, c.empresa_id
     db.delete(c)
+    registrar_operacion(db, empresa_id, 'cuentas', entidad_uuid, 'D')
     db.commit()
     return True
 

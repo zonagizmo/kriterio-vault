@@ -1,10 +1,11 @@
 from sqlalchemy import String, Integer, Numeric, Text, ForeignKey, Date, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
+from app.models.sync_mixin import SyncMixin
 import datetime
 
 
-class Banco(Base):
+class Banco(SyncMixin, Base):
     __tablename__ = "bancos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -19,7 +20,7 @@ class Banco(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class MovBanco(Base):
+class MovBanco(SyncMixin, Base):
     __tablename__ = "mov_bancos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

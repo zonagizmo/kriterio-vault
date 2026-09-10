@@ -1,0 +1,18 @@
+[Unit]
+Description=Kriterio Vault - servidor central de sincronizacion
+After=network.target postgresql.service
+
+[Service]
+# Un solo proceso a propósito: el backup y el push de sincronización usan un
+# scheduler en memoria (APScheduler); con --workers > 1 cada proceso lanzaría
+# su propio scheduler y se duplicarían backups y sincronizaciones.
+Type=simple
+User=kriterio
+WorkingDirectory=/opt/kriterio-vault/backend
+Environment=PATH=/opt/kriterio-vault/backend/venv/bin
+ExecStart=/opt/kriterio-vault/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

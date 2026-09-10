@@ -3,6 +3,7 @@ from sqlalchemy import func
 from app.models.contabilidad import Extra, ExApunte
 from app.models.clientes_proveedores import Vencimiento
 from app.schemas.extras import ExtraCreate, ExtraUpdate, ExtraPagoInfo
+from app.services.sync import registrar_operacion
 
 
 def _cargar_apuntes(db, empresa_id, extra_numero):
@@ -152,6 +153,7 @@ def create_extra(db: Session, data: ExtraCreate) -> Extra:
     from app.services.contabilidad import generar_asiento_extra
     generar_asiento_extra(db, data.empresa_id, extra)
 
+    registrar_operacion(db, data.empresa_id, 'extras', extra.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(extra)
     extra.apuntes = _cargar_apuntes(db, data.empresa_id, extra.numero)
@@ -170,6 +172,7 @@ def update_extra(db: Session, extra_id: int, data: ExtraUpdate) -> Extra | None:
 
     fecha_anterior = extra.fecha
     campos = data.model_dump(exclude={'apuntes'}, exclude_unset=True)
+    extra.version = (extra.version or 1) + 1
     for campo, valor in campos.items():
         setattr(extra, campo, valor)
 
@@ -243,6 +246,8 @@ def update_extra(db: Session, extra_id: int, data: ExtraUpdate) -> Extra | None:
             db.flush()
             _gen(db, extra.empresa_id, extra)
 
+    registrar_operacion(db, extra.empresa_id, 'extras', extra.uuid, 'U',
+                        data.model_dump(exclude={'apuntes'}, exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(extra)
     extra.apuntes = _cargar_apuntes(db, extra.empresa_id, extra.numero)
@@ -286,6 +291,7 @@ def delete_extra(db: Session, extra_id: int) -> bool:
     extra = db.query(Extra).filter(Extra.id == extra_id).first()
     if not extra:
         return False
+    entidad_uuid, empresa_id = extra.uuid, extra.empresa_id
     # Lanza ValueError si algún vencimiento tiene pagos bancarios asociados
     _borrar_vencimiento(db, extra.empresa_id, 'X', extra.numero)
     _eliminar_asiento_documento(db, extra.empresa_id, 'X', extra.numero)
@@ -299,5 +305,6 @@ def delete_extra(db: Session, extra_id: int) -> bool:
         DiarioTxt.numero == extra.numero,
     ).delete()
     db.delete(extra)
+    registrar_operacion(db, empresa_id, 'extras', entidad_uuid, 'D')
     db.commit()
     return True

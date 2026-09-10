@@ -1,10 +1,11 @@
 from sqlalchemy import String, Integer, Numeric, Boolean, Text, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
+from app.models.sync_mixin import SyncMixin
 import datetime
 
 
-class Cliente(Base):
+class Cliente(SyncMixin, Base):
     __tablename__ = "clientes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -38,7 +39,7 @@ class Cliente(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class Proveedor(Base):
+class Proveedor(SyncMixin, Base):
     __tablename__ = "proveedores"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -70,7 +71,7 @@ class Proveedor(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class Vencimiento(Base):
+class Vencimiento(SyncMixin, Base):
     __tablename__ = "vencimientos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

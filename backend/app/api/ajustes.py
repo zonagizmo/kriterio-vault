@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sqlite3
 import tempfile
@@ -46,11 +47,26 @@ def _reprogramar_job(hora: str, dias: list):
     _scheduler.reschedule_job("backup_auto", trigger="cron", hour=h, minute=m, day_of_week=dias_str)
 
 
+def _job_sincronizar():
+    if not os.getenv("SYNC_SERVER_URL"):
+        return
+    from app.db.database import SessionLocal
+    from app.services.sync_push import sincronizar_con_servidor
+    db = SessionLocal()
+    try:
+        sincronizar_con_servidor(db)
+    except Exception:
+        pass  # sin conexión o servidor caído: se reintenta en el siguiente ciclo
+    finally:
+        db.close()
+
+
 def iniciar_scheduler():
     cfg = leer_config()
     h, m = map(int, cfg["hora"].split(":"))
     dias_str = ",".join(str(d) for d in cfg["dias"])
     _scheduler.add_job(hacer_backup, "cron", hour=h, minute=m, day_of_week=dias_str, id="backup_auto")
+    _scheduler.add_job(_job_sincronizar, "interval", minutes=15, id="sync_push")
     _scheduler.start()
 
 

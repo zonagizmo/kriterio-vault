@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from app.models.facturacion import Articulo
 from app.schemas.facturacion import ArticuloCreate, ArticuloUpdate
+from app.services.sync import registrar_operacion
 
 
 def get_articulos(db: Session, empresa_id: int, q: str = "", familia: int = None,
@@ -33,6 +34,8 @@ def create_articulo(db: Session, data: ArticuloCreate) -> Articulo:
     ).scalar() or 0
     articulo = Articulo(**data.model_dump(), numero=ultimo + 1)
     db.add(articulo)
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'articulos', articulo.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(articulo)
     return articulo
@@ -42,8 +45,11 @@ def update_articulo(db: Session, articulo_id: int, data: ArticuloUpdate) -> Arti
     articulo = get_articulo(db, articulo_id)
     if not articulo:
         return None
+    articulo.version = (articulo.version or 1) + 1
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(articulo, campo, valor)
+    registrar_operacion(db, articulo.empresa_id, 'articulos', articulo.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(articulo)
     return articulo
@@ -53,6 +59,8 @@ def delete_articulo(db: Session, articulo_id: int) -> bool:
     articulo = get_articulo(db, articulo_id)
     if not articulo:
         return False
+    entidad_uuid, empresa_id = articulo.uuid, articulo.empresa_id
     db.delete(articulo)
+    registrar_operacion(db, empresa_id, 'articulos', entidad_uuid, 'D')
     db.commit()
     return True

@@ -5,6 +5,7 @@ from app.models.clientes_proveedores import Vencimiento
 from app.models.facturacion import FacturaEmitida, FacturaRecibida
 from app.schemas.bancos import BancoCreate, BancoUpdate, MovimientoCreate, MovimientoUpdate, VencimientoCreate, VencimientoUpdate
 from app.services import contabilidad as cont_svc
+from app.services.sync import registrar_operacion
 import datetime
 
 
@@ -99,6 +100,8 @@ def create_banco(db: Session, data: BancoCreate) -> Banco:
         saldoact=0,
     )
     db.add(banco)
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'bancos', banco.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(banco)
     return banco
@@ -140,8 +143,11 @@ def update_banco(db: Session, banco_id: int, data: BancoUpdate) -> Banco | None:
             Diario.tpasiento == f'B{old_numero}',
         ).update({'tpasiento': f'B{nuevo_numero}'})
 
+    banco.version = (banco.version or 1) + 1
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(banco, campo, valor)
+    registrar_operacion(db, banco.empresa_id, 'bancos', banco.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(banco)
     return banco
@@ -160,7 +166,9 @@ def delete_banco(db: Session, banco_id: int) -> bool:
             f"No se puede eliminar el banco '{banco.nombre}': tiene {n_movs} movimientos. "
             "Elimina primero sus movimientos."
         )
+    entidad_uuid, empresa_id = banco.uuid, banco.empresa_id
     db.delete(banco)
+    registrar_operacion(db, empresa_id, 'bancos', entidad_uuid, 'D')
     db.commit()
     return True
 
@@ -404,6 +412,7 @@ def create_movimiento(db: Session, data: MovimientoCreate) -> MovBanco:
     for banco_num in bancos_a_recalc:
         _recalcular_saldos(db, data.empresa_id, banco_num)
 
+    registrar_operacion(db, data.empresa_id, 'mov_bancos', mov.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(mov)
     mov.pagos = db.query(Pago).filter(
@@ -443,6 +452,7 @@ def update_movimiento(db: Session, mov_id: int, data: MovimientoUpdate) -> MovBa
     clave_anterior = mov.clave
     empresa_id = mov.empresa_id
     banco_num = mov.banco
+    mov.version = (mov.version or 1) + 1
 
     for campo in ('fecha', 'texto', 'clave', 'notas', 'estado'):
         val = getattr(data, campo, None)
@@ -603,6 +613,8 @@ def update_movimiento(db: Session, mov_id: int, data: MovimientoUpdate) -> MovBa
                 fecha=mov.fecha, importe=float(mov.total or 0)):
             cont_svc.generar_asiento_banco(db, empresa_id, mov, banco_obj_reload, todos_pagos)
 
+    registrar_operacion(db, empresa_id, 'mov_bancos', mov.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(mov)
     mov.pagos = db.query(Pago).filter(
@@ -621,6 +633,7 @@ def delete_movimiento(db: Session, mov_id: int) -> bool:
     empresa_id = mov.empresa_id
     banco_num  = mov.banco
     numero_mov = mov.numero
+    entidad_uuid = mov.uuid
 
     # Revertir pagos sobre vencimientos y eliminar movimientos espejo
     pagos = db.query(Pago).filter(
@@ -686,6 +699,7 @@ def delete_movimiento(db: Session, mov_id: int) -> bool:
     for emp_id, b_num, num in contrapartes_a_recalcular:
         _recalcular_saldos(db, emp_id, b_num)
 
+    registrar_operacion(db, empresa_id, 'mov_bancos', entidad_uuid, 'D')
     db.commit()
     return True
 
@@ -828,6 +842,8 @@ def create_vencimiento(db: Session, data: VencimientoCreate) -> Vencimiento:
         pendiente=data.importe,
     )
     db.add(vto)
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'vencimientos', vto.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(vto)
     return vto
@@ -837,8 +853,11 @@ def update_vencimiento(db: Session, vto_id: int, data: VencimientoUpdate) -> Ven
     vto = get_vencimiento(db, vto_id)
     if not vto:
         return None
+    vto.version = (vto.version or 1) + 1
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(vto, campo, valor)
+    registrar_operacion(db, vto.empresa_id, 'vencimientos', vto.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(vto)
     return vto

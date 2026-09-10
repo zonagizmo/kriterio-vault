@@ -8,6 +8,7 @@ from app.schemas.facturacion import (
 from app.services.documentos import (
     siguiente_numero, siguiente_cnumero, guardar_lineas, get_lineas, total_lineas,
 )
+from app.services.sync import registrar_operacion
 
 
 # ─── Albaranes emitidos ───────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ def create_albaran_emi(db: Session, data: AlbaranEmiCreate) -> AlbaranEmitido:
     lineas = guardar_lineas(db, data.empresa_id, numero, TALBARAN_EMI, data.fecha, data.lineas)
     alb.importe = total_lineas(lineas)
     alb.apuntes = len(lineas)
+    registrar_operacion(db, data.empresa_id, 'albaranes_emitidos', alb.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(alb)
     _cargar_lineas_emi(db, alb)
@@ -67,6 +69,7 @@ def update_albaran_emi(db: Session, albaran_id: int, data: AlbaranEmiUpdate) -> 
     alb = db.query(AlbaranEmitido).filter(AlbaranEmitido.id == albaran_id).first()
     if not alb:
         return None
+    alb.version = (alb.version or 1) + 1
     for campo, valor in data.model_dump(exclude={'lineas'}, exclude_unset=True).items():
         setattr(alb, campo, valor)
     if data.lineas is not None:
@@ -74,6 +77,8 @@ def update_albaran_emi(db: Session, albaran_id: int, data: AlbaranEmiUpdate) -> 
                                 alb.fecha, data.lineas)
         alb.importe = total_lineas(lineas)
         alb.apuntes = len(lineas)
+    registrar_operacion(db, alb.empresa_id, 'albaranes_emitidos', alb.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(alb)
     _cargar_lineas_emi(db, alb)
@@ -84,12 +89,14 @@ def delete_albaran_emi(db: Session, albaran_id: int) -> bool:
     alb = db.query(AlbaranEmitido).filter(AlbaranEmitido.id == albaran_id).first()
     if not alb:
         return False
+    entidad_uuid, empresa_id = alb.uuid, alb.empresa_id
     db.query(Apunte).filter(
         Apunte.empresa_id == alb.empresa_id,
         Apunte.albaran == alb.numero,
         Apunte.talbaran == TALBARAN_EMI,
     ).delete()
     db.delete(alb)
+    registrar_operacion(db, empresa_id, 'albaranes_emitidos', entidad_uuid, 'D')
     db.commit()
     return True
 
@@ -140,6 +147,7 @@ def create_albaran_rec(db: Session, data: AlbaranRecCreate) -> AlbaranRecibido:
     lineas = guardar_lineas(db, data.empresa_id, numero, TALBARAN_REC, data.fecha, data.lineas)
     alb.importe = total_lineas(lineas)
     alb.apuntes = len(lineas)
+    registrar_operacion(db, data.empresa_id, 'albaranes_recibidos', alb.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(alb)
     _cargar_lineas_rec(db, alb)
@@ -150,6 +158,7 @@ def update_albaran_rec(db: Session, albaran_id: int, data: AlbaranRecUpdate) -> 
     alb = db.query(AlbaranRecibido).filter(AlbaranRecibido.id == albaran_id).first()
     if not alb:
         return None
+    alb.version = (alb.version or 1) + 1
     for campo, valor in data.model_dump(exclude={'lineas'}, exclude_unset=True).items():
         setattr(alb, campo, valor)
     if data.lineas is not None:
@@ -157,6 +166,8 @@ def update_albaran_rec(db: Session, albaran_id: int, data: AlbaranRecUpdate) -> 
                                 alb.fecha, data.lineas)
         alb.importe = total_lineas(lineas)
         alb.apuntes = len(lineas)
+    registrar_operacion(db, alb.empresa_id, 'albaranes_recibidos', alb.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(alb)
     _cargar_lineas_rec(db, alb)
@@ -167,11 +178,13 @@ def delete_albaran_rec(db: Session, albaran_id: int) -> bool:
     alb = db.query(AlbaranRecibido).filter(AlbaranRecibido.id == albaran_id).first()
     if not alb:
         return False
+    entidad_uuid, empresa_id = alb.uuid, alb.empresa_id
     db.query(Apunte).filter(
         Apunte.empresa_id == alb.empresa_id,
         Apunte.albaran == alb.numero,
         Apunte.talbaran == TALBARAN_REC,
     ).delete()
     db.delete(alb)
+    registrar_operacion(db, empresa_id, 'albaranes_recibidos', entidad_uuid, 'D')
     db.commit()
     return True

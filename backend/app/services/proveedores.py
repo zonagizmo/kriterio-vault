@@ -3,6 +3,7 @@ from sqlalchemy import or_, func
 from app.models.clientes_proveedores import Proveedor
 from app.models.contabilidad import Cuenta
 from app.schemas.clientes_proveedores import ProveedorCreate, ProveedorUpdate
+from app.services.sync import registrar_operacion
 
 
 def _cuenta_proveedor(db: Session, empresa_id: int, numero: int) -> str:
@@ -57,6 +58,8 @@ def create_proveedor(db: Session, data: ProveedorCreate) -> Proveedor:
     if not existe:
         db.add(Cuenta(empresa_id=data.empresa_id, cuenta=proveedor.cuenta, texto=(data.nombre or "").strip()))
 
+    db.flush()
+    registrar_operacion(db, data.empresa_id, 'proveedores', proveedor.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(proveedor)
     return proveedor
@@ -66,8 +69,11 @@ def update_proveedor(db: Session, proveedor_id: int, data: ProveedorUpdate) -> P
     proveedor = get_proveedor(db, proveedor_id)
     if not proveedor:
         return None
+    proveedor.version = (proveedor.version or 1) + 1
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(proveedor, campo, valor)
+    registrar_operacion(db, proveedor.empresa_id, 'proveedores', proveedor.uuid, 'U',
+                        data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(proveedor)
     return proveedor
@@ -77,6 +83,8 @@ def delete_proveedor(db: Session, proveedor_id: int) -> bool:
     proveedor = get_proveedor(db, proveedor_id)
     if not proveedor:
         return False
+    entidad_uuid, empresa_id = proveedor.uuid, proveedor.empresa_id
     db.delete(proveedor)
+    registrar_operacion(db, empresa_id, 'proveedores', entidad_uuid, 'D')
     db.commit()
     return True

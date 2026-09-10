@@ -5,6 +5,36 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.10.00] — 2026-09-07 — Fase 2 de sincronización: servidor central (solo subida)
+
+### Nuevo
+- **Servidor central de sincronización**: la misma app FastAPI, con endpoints nuevos para recibir y aplicar las operaciones que empuja cada instalación. `POST /api/sync/push` (autenticado por clave de API por instalación, `app/api/sync.py`) recibe un lote de `sync_log` y las reproduce con la misma lógica de servicio que las generó (`app/services/sync_replay.py`, registro de las 15 tablas sincronizables), no copiando filas sueltas — así se regeneran también los efectos derivados (asientos, vencimientos...). Idempotente ante reintentos.
+- **Cliente de sincronización**: `app/services/sync_push.py` empuja el log pendiente al servidor configurado (`SYNC_SERVER_URL`/`SYNC_API_KEY`), cada 15 minutos vía el scheduler ya existente para backups, y bajo demanda en `POST /api/sync/ejecutar`. Sin conexión, se reintenta en el siguiente ciclo sin bloquear la app.
+- **Registro de instalaciones**: modelo `Instalacion` + script `backend/scripts/crear_instalacion.py` (se ejecuta a mano en el servidor, no por HTTP — no hay admin autenticado que pueda dar de alta otras instalaciones). Cada instalación puede acotarse a empresas concretas.
+- **Aprovisionamiento del servidor**: `deploy/` — script idempotente para Debian (PostgreSQL, Caddy con TLS automático, systemd, firewall), instrucciones completas en `deploy/README.md`. Servidor: `kriteriovault.naslive.es`.
+- Verificado extremo a extremo con dos bases de datos independientes simulando cliente y servidor reales: alta, edición, baja, reintento idempotente, autenticación y restricción por empresa, y una factura completa (cabecera + líneas + vencimiento) reconstruida correctamente en destino.
+
+---
+
+## [1.09.00] — 2026-09-04 — Fase 1 de sincronización completada en toda la app
+
+### Nuevo
+- **`SyncMixin` (uuid/version/created_at/updated_at) y registro en `sync_log` en los 15 agregados raíz** de la aplicación: FacturaEmitida/Recibida, Cliente, Proveedor, Vencimiento, Banco, MovBanco, Familia, Articulo, AlbaranEmitido/Recibido, Cuenta, Extra, UsuarioNNA, PagaNNA. Quedan fuera deliberadamente las líneas/derivados de un documento padre (Apunte, ExApunte, Diario, DiarioTxt, Eriva, Pago) y las tablas sin alta/edición propia (Presupuesto, Pedidos, Albaranes de inventario/reparto...). Migración de 17.766 filas existentes verificada (0 sin uuid, 0 duplicados). Detalle completo en `docs/sincronizacion.md`.
+- Caso especial resuelto: las altas de `usuarios_nna`/`pagas_nna` usan SQL crudo (no ORM), así que el `uuid` se genera a mano en Python antes del INSERT.
+
+---
+
+## [1.08.00] — 2026-09-04 — Base para sincronización con servidor central (fase 1)
+
+### Nuevo
+- **Infraestructura de sincronización, sin sincronizar nada aún**: primer paso de un proyecto más amplio para poder trabajar desde varios PCs con los mismos datos vía un servidor central (ver `docs/sincronizacion.md` para la arquitectura completa). Implementado como referencia solo en el módulo de Facturas (emitidas y recibidas):
+  - Columnas nuevas `uuid`, `version`, `created_at`, `updated_at` (`app/models/sync_mixin.py`) — `uuid` es la identidad estable entre instalaciones (el `numero` de negocio no sirve, puede colisionar entre instalaciones offline).
+  - Tabla `sync_log` (`app/models/sync.py`): registro de operaciones de alta/edición/baja, con los mismos datos que recibió el endpoint, para poder reproducirlas en el servidor más adelante.
+  - Identidad de instalación (`app/services/sync.py`): UUID propio por instalación, persistido en `backend/instalacion.json`.
+  - Migración automática de las 1.343 facturas existentes (uuid único por fila, sin duplicados, verificado).
+
+---
+
 ## [1.07.00] — 2026-09-04 — Control de facturas recibidas duplicadas
 
 ### Nuevo

@@ -12,6 +12,7 @@ from app.services.documentos import (
     calcular_importe_linea,
 )
 from app.services import contabilidad as cont_svc
+from app.services.sync import registrar_operacion
 
 TALBARAN_FEMI = 'F'
 TALBARAN_FREC = 'C'
@@ -226,6 +227,7 @@ def create_factura_emi(db: Session, data: FacturaEmiCreate) -> FacturaEmitida:
     fac.totaldecl = fac.total
     _crear_vencimiento(db, data.empresa_id, 'F', numero, data.fecha, fac.total, data.clcuenta)
     cont_svc.generar_asiento_factura_emi(db, data.empresa_id, fac, lineas)
+    registrar_operacion(db, data.empresa_id, 'facturas_emitidas', fac.uuid, 'C', data.model_dump(mode='json'))
     db.commit()
     db.refresh(fac)
     _lineas(db, fac, TALBARAN_FEMI)
@@ -239,6 +241,7 @@ def update_factura_emi(db: Session, factura_id: int, data: FacturaEmiUpdate) -> 
         return None
     fecha_anterior = fac.fecha
     campos = data.model_dump(exclude={'lineas'}, exclude_unset=True)
+    fac.version = (fac.version or 1) + 1
     for campo, valor in campos.items():
         setattr(fac, campo, valor)
 
@@ -279,6 +282,8 @@ def update_factura_emi(db: Session, factura_id: int, data: FacturaEmiUpdate) -> 
         cont_svc.generar_asiento_factura_emi(
             db, fac.empresa_id, fac, get_lineas(db, fac.empresa_id, fac.numero, TALBARAN_FEMI))
 
+    registrar_operacion(db, fac.empresa_id, 'facturas_emitidas', fac.uuid, 'U',
+                        data.model_dump(exclude={'lineas'}, exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(fac)
     _lineas(db, fac, TALBARAN_FEMI)
@@ -290,6 +295,7 @@ def delete_factura_emi(db: Session, factura_id: int) -> bool:
     fac = db.query(FacturaEmitida).filter(FacturaEmitida.id == factura_id).first()
     if not fac:
         return False
+    entidad_uuid, empresa_id = fac.uuid, fac.empresa_id
     # Lanza ValueError si el vencimiento tiene pagos: validar antes de borrar nada
     _borrar_vencimiento(db, fac.empresa_id, 'F', fac.numero)
     db.query(Apunte).filter(
@@ -299,6 +305,7 @@ def delete_factura_emi(db: Session, factura_id: int) -> bool:
     ).delete()
     cont_svc._eliminar_asiento_documento(db, fac.empresa_id, 'F', fac.numero)
     db.delete(fac)
+    registrar_operacion(db, empresa_id, 'facturas_emitidas', entidad_uuid, 'D')
     db.commit()
     return True
 
@@ -390,6 +397,8 @@ def create_factura_rec(db: Session, data: FacturaRecCreate) -> FacturaRecibida:
     fac.totaldecl = fac.total
     _crear_vencimiento(db, data.empresa_id, 'R', numero, data.fecha, fac.total, prcuenta)
     cont_svc.generar_asiento_factura_rec(db, data.empresa_id, fac, lineas)
+    registrar_operacion(db, data.empresa_id, 'facturas_recibidas', fac.uuid, 'C',
+                        data.model_dump(exclude={'forzar'}, mode='json'))
     db.commit()
     db.refresh(fac)
     _lineas(db, fac, TALBARAN_FREC)
@@ -412,6 +421,7 @@ def update_factura_rec(db: Session, factura_id: int, data: FacturaRecUpdate) -> 
             total_nuevo = _total_previsto(data.lineas) if data.lineas is not None else fac.total
             raise FacturaDuplicadaError(dup, total_nuevo)
 
+    fac.version = (fac.version or 1) + 1
     for campo, valor in campos.items():
         setattr(fac, campo, valor)
 
@@ -452,6 +462,8 @@ def update_factura_rec(db: Session, factura_id: int, data: FacturaRecUpdate) -> 
         cont_svc.generar_asiento_factura_rec(
             db, fac.empresa_id, fac, get_lineas(db, fac.empresa_id, fac.numero, TALBARAN_FREC))
 
+    registrar_operacion(db, fac.empresa_id, 'facturas_recibidas', fac.uuid, 'U',
+                        data.model_dump(exclude={'lineas', 'forzar'}, exclude_unset=True, mode='json'))
     db.commit()
     db.refresh(fac)
     _lineas(db, fac, TALBARAN_FREC)
@@ -463,6 +475,7 @@ def delete_factura_rec(db: Session, factura_id: int) -> bool:
     fac = db.query(FacturaRecibida).filter(FacturaRecibida.id == factura_id).first()
     if not fac:
         return False
+    entidad_uuid, empresa_id = fac.uuid, fac.empresa_id
     # Lanza ValueError si el vencimiento tiene pagos: validar antes de borrar nada
     _borrar_vencimiento(db, fac.empresa_id, 'R', fac.numero)
     db.query(Apunte).filter(
@@ -472,6 +485,7 @@ def delete_factura_rec(db: Session, factura_id: int) -> bool:
     ).delete()
     cont_svc._eliminar_asiento_documento(db, fac.empresa_id, 'R', fac.numero)
     db.delete(fac)
+    registrar_operacion(db, empresa_id, 'facturas_recibidas', entidad_uuid, 'D')
     db.commit()
     return True
 

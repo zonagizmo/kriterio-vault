@@ -1,10 +1,11 @@
 from sqlalchemy import String, Integer, Numeric, Boolean, Text, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
+from app.models.sync_mixin import SyncMixin
 import datetime
 
 
-class Familia(Base):
+class Familia(SyncMixin, Base):
     __tablename__ = "familias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -27,7 +28,7 @@ class FamiliaC(Base):
     texto: Mapped[str] = mapped_column(String(100), nullable=True)
 
 
-class Articulo(Base):
+class Articulo(SyncMixin, Base):
     __tablename__ = "articulos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -74,7 +75,7 @@ class ArticuloC(Base):
     dato: Mapped[str] = mapped_column(String(100), nullable=True)
 
 
-class FacturaEmitida(Base):
+class FacturaEmitida(SyncMixin, Base):
     __tablename__ = "facturas_emitidas"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -99,7 +100,7 @@ class FacturaEmitida(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class FacturaRecibida(Base):
+class FacturaRecibida(SyncMixin, Base):
     __tablename__ = "facturas_recibidas"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -126,7 +127,7 @@ class FacturaRecibida(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class AlbaranEmitido(Base):
+class AlbaranEmitido(SyncMixin, Base):
     __tablename__ = "albaranes_emitidos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -148,7 +149,7 @@ class AlbaranEmitido(Base):
     notas: Mapped[str] = mapped_column(Text, nullable=True)
 
 
-class AlbaranRecibido(Base):
+class AlbaranRecibido(SyncMixin, Base):
     __tablename__ = "albaranes_recibidos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

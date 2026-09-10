@@ -1,16 +1,19 @@
 import asyncio
+import datetime
 import os
 import signal
+import uuid as uuid_lib
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.database import crear_tablas, engine
-from app.api import empresas, clientes, proveedores, familias, articulos, albaranes, facturas, bancos, contabilidad, usuarios, extras
+from app.api import empresas, clientes, proveedores, familias, articulos, albaranes, facturas, bancos, contabilidad, usuarios, extras, sync
 from app.api.dashboard import router as dashboard_router
 from app.api.estadisticas import router as estadisticas_router
 from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener_scheduler
 import app.models.usuarios  # registra tablas usuarios_nna y pagas_nna
+import app.models.sync  # registra tabla sync_log
 
-VERSION = "1.07.00"
+VERSION = "1.10.00"
 
 
 def _migraciones():
@@ -28,6 +31,42 @@ def _migraciones():
     for col in ("nif", "domicilio", "localidad", "provincia", "cod_postal", "telefono", "email"):
         if col not in cols_empresas:
             cur.execute(f"ALTER TABLE empresas ADD COLUMN {col} TEXT")
+
+    # Columnas de sincronización (fase 1: uuid/version/timestamps) en los 15
+    # agregados raíz sincronizables. El valor indica la columna de fecha de
+    # negocio a usar para aproximar created_at/updated_at en filas ya
+    # existentes (None = no hay, se usa el momento de esta migración).
+    TABLAS_SYNC = {
+        "facturas_emitidas": "fecha", "facturas_recibidas": "fecha",
+        "clientes": None, "proveedores": None,
+        "vencimientos": "fecha", "bancos": None, "mov_bancos": "fecha",
+        "familias": None, "articulos": None,
+        "albaranes_emitidos": "fecha", "albaranes_recibidos": "fecha",
+        "cuentas": None, "extras": "fecha",
+        "usuarios_nna": None, "pagas_nna": "fecha",
+    }
+    ahora_txt = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    for tabla, fecha_col in TABLAS_SYNC.items():
+        cols = {r[1] for r in cur.execute(f"PRAGMA table_info({tabla})")}
+        if "uuid" not in cols:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN uuid TEXT")
+        if "version" not in cols:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN version INTEGER DEFAULT 1")
+        if "created_at" not in cols:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN created_at TEXT")
+        if "updated_at" not in cols:
+            cur.execute(f"ALTER TABLE {tabla} ADD COLUMN updated_at TEXT")
+        # Rellenar filas ya existentes: uuid propio por fila, timestamp aproximado
+        # a partir de la fecha de negocio si existe (si no, el momento de la migración).
+        campo_sel = fecha_col or "NULL"
+        for (row_id, fecha) in cur.execute(f"SELECT id, {campo_sel} FROM {tabla} WHERE uuid IS NULL").fetchall():
+            ts = f"{fecha} 00:00:00" if fecha else ahora_txt
+            cur.execute(
+                f"UPDATE {tabla} SET uuid = ?, version = 1, created_at = ?, updated_at = ? WHERE id = ?",
+                (str(uuid_lib.uuid4()), ts, ts, row_id),
+            )
+        cur.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{tabla}_uuid ON {tabla}(uuid)")
+
     raw.commit()
     raw.close()
 
@@ -69,6 +108,7 @@ app.include_router(bancos.router)
 app.include_router(contabilidad.router)
 app.include_router(extras.router)
 app.include_router(usuarios.router)
+app.include_router(sync.router)
 app.include_router(ajustes_router)
 app.include_router(dashboard_router)
 app.include_router(estadisticas_router)
