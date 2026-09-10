@@ -5,6 +5,13 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.10.01] — 2026-09-10 — Fix: migraciones de arranque rompían en PostgreSQL
+
+### Corregido
+- **`_migraciones()` (`app/main.py`) fallaba al arrancar contra una base de datos PostgreSQL nueva** — usa sintaxis `PRAGMA table_info(...)` propia de SQLite, que no existe en Postgres (`psycopg2.errors.SyntaxError`), y la app no arrancaba. Descubierto en la primera instalación real del [servidor central por YunoHost](https://github.com/zonagizmo/kriterio-vault_ynh). Como `crear_tablas()` (`Base.metadata.create_all()`) ya crea el esquema completo actual en cualquier base de datos nueva, `_migraciones()` ahora se salta por completo cuando el dialecto no es SQLite — su único propósito es poner al día un esquema SQLite local antiguo, no aplica a una Postgres recién creada.
+
+---
+
 ## [1.10.00] — 2026-09-07 — Fase 2 de sincronización: servidor central (solo subida)
 
 ### Nuevo

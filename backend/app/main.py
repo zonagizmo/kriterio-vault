@@ -13,11 +13,20 @@ from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener
 import app.models.usuarios  # registra tablas usuarios_nna y pagas_nna
 import app.models.sync  # registra tabla sync_log
 
-VERSION = "1.10.00"
+VERSION = "1.10.01"
 
 
 def _migraciones():
-    """Migraciones SQL para columnas añadidas tras la creación inicial."""
+    """Migraciones SQL para columnas añadidas tras la creación inicial.
+
+    Solo aplica a instalaciones SQLite con historial (el caso local de
+    siempre): usa sintaxis PRAGMA/parámetros propia de SQLite y su único
+    propósito es poner al día un esquema antiguo. En una base de datos
+    nueva (SQLite o Postgres) crear_tablas() ya crea el esquema actual
+    completo, así que aquí no hay nada que hacer.
+    """
+    if engine.dialect.name != "sqlite":
+        return
     raw = engine.raw_connection()
     cur = raw.cursor()
     cols_mov = {r[1] for r in cur.execute("PRAGMA table_info(mov_bancos)")}
