@@ -5,6 +5,14 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.10.02] — 2026-09-11 — Corrección de datos: 4 discrepancias de conciliación en empresa 2
+
+### Corregido
+- **4 bancos/cajas de empresa 2 mostraban discrepancia en Conciliación** (CAJA, COORDINACION (SERGIO), CAJA COORDINACION, TICKET CONSUM (NO FACTURA)): 4 asientos duplicados en `diario` (nº 1345, 1366, 1359, 1360) registraban dos veces el mismo traspaso interno entre estas cajas. Dos causas distintas:
+  - **1345 y 1366** (traspasos de 231€ y 100€): el traspaso se había dado de alta como dos movimientos bancarios independientes, uno por cada caja (p.ej. "PAGAS F/S 13-14 JUNIO" en CAJA como salida y en CAJA COORDINACION como entrada, mismo importe y fecha, sin enlazar entre sí como transferencia), y cada uno generó su propio asiento completo de traspaso — duplicando el importe en el Libro Mayor de ambas cajas.
+  - **1359 y 1360** (traspasos de 26,85€ y 22,50€, dos tickets de consumo): asientos huérfanos sin ningún movimiento bancario real que los respalde en ninguna de las dos cajas — duplicaban íntegramente traspasos ya correctamente registrados en otros asientos (2727 y 2726).
+  - Solución aplicada: borrado de los 4 asientos duplicados (script puntual sobre la BD, revirtiendo `cuentas.debe/haber` igual que `_eliminar_asiento_banco`), sin cambios de código — el mecanismo actual de generación de asientos (`generar_asiento_banco`) ya tiene salvaguardas para este patrón que los asientos duplicados, más antiguos, no tenían. Verificado: empresa 1 y empresa 2 vuelven a 0 discrepancias en todos los bancos/cajas. Backup previo: `backend/backups/gestionmgd_pre_fix_conciliacion_emp2_2026-09-11_09-29.db`.
+
 ## [1.10.01] — 2026-09-10 — Fix: migraciones de arranque rompían en PostgreSQL
 
 ### Corregido

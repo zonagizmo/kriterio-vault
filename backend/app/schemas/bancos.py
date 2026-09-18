@@ -80,6 +80,7 @@ class MovimientoCreate(MovimientoBase):
     total: float
     empresa_id: int
     pagos: list[PagoCreate] = []
+    forzar: Optional[bool] = False  # omite el aviso de posible traspaso duplicado
 
 class MovimientoUpdate(MovimientoBase):
     total: Optional[float] = None   # override para distinguir "no enviado" de 0

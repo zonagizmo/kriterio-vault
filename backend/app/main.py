@@ -13,7 +13,7 @@ from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener
 import app.models.usuarios  # registra tablas usuarios_nna y pagas_nna
 import app.models.sync  # registra tabla sync_log
 
-VERSION = "1.10.01"
+VERSION = "1.10.02"
 
 
 def _migraciones():

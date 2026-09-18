@@ -340,7 +340,7 @@ export default function MovimientosBancoPage() {
 
       if (esNuevo) {
         if (!form.banco) { setError('Selecciona un banco'); setGuardando(false); return }
-        const created = await createMovimiento({
+        const payload = {
           empresa_id: empresa.id,
           banco: parseInt(form.banco),
           fecha: form.fecha,
@@ -349,7 +349,21 @@ export default function MovimientosBancoPage() {
           notas: form.notas || null,
           estado: form.estado || null,
           pagos: pagosClean,
-        })
+        }
+        let created
+        try {
+          created = await createMovimiento(payload)
+        } catch (err) {
+          if (err.detail?.traspaso_sospechoso) {
+            if (!confirm(`${err.detail.mensaje}\n\n¿Guardar de todas formas como movimiento independiente?`)) {
+              setGuardando(false)
+              return
+            }
+            created = await createMovimiento({ ...payload, forzar: true })
+          } else {
+            throw err
+          }
+        }
         setNuevoId(created.id)
         // Reabrir el formulario en blanco para poder seguir dando de alta movimientos seguidos
         setForm(formVacio())

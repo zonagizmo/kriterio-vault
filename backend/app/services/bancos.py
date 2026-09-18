@@ -9,6 +9,43 @@ from app.services.sync import registrar_operacion
 import datetime
 
 
+class TraspasoSospechosoError(Exception):
+    """Ya existe un movimiento sin enlazar en otro banco de la misma empresa, misma
+    fecha e importe opuesto: probablemente es el mismo traspaso dado de alta por los
+    dos lados en vez de usar el campo "banco destino". Se usa para avisar al
+    usuario, no bloquea por sí sola (ver `forzar`)."""
+    def __init__(self, mov: MovBanco):
+        self.mov = mov
+
+
+def _buscar_traspaso_sospechoso(db: Session, empresa_id: int, banco: int,
+                                fecha, total: float, excluir_mov_id: int = None):
+    """Detecta un posible traspaso entre cajas dado de alta como dos movimientos
+    independientes (uno por banco) en vez de usar el campo "banco destino"
+    (Pago.bancot), que enlaza ambos lados y genera un único asiento. Candidato:
+    otro movimiento en OTRO banco de la misma empresa, misma fecha, importe
+    exactamente opuesto, y que a su vez tampoco esté ya enlazado como transferencia
+    (ni como origen ni como contraparte) — si ya está enlazado, no es este bug."""
+    candidatos = db.query(MovBanco).filter(
+        MovBanco.empresa_id == empresa_id,
+        MovBanco.banco != banco,
+        MovBanco.fecha == fecha,
+        MovBanco.total == round(-float(total), 2),
+    )
+    if excluir_mov_id:
+        candidatos = candidatos.filter(MovBanco.id != excluir_mov_id)
+    for cand in candidatos.all():
+        ya_enlazado = db.query(Pago).filter(
+            Pago.empresa_id == empresa_id,
+            Pago.banco == cand.banco,
+            Pago.numero == cand.numero,
+            Pago.bancot.isnot(None),
+        ).first()
+        if not ya_enlazado:
+            return cand
+    return None
+
+
 def siguiente_numero_vencimiento(db: Session, empresa_id: int) -> int:
     """Siguiente número de vencimiento para la empresa.
     Considera también los pagos que referencian vencimientos ya borrados: si se
@@ -311,6 +348,12 @@ def _cnumero_mov(db, empresa_id, banco, fecha, total):
 
 
 def create_movimiento(db: Session, data: MovimientoCreate) -> MovBanco:
+    tiene_transferencia = any(pd.bancot for pd in data.pagos)
+    if not tiene_transferencia and not data.forzar:
+        sospechoso = _buscar_traspaso_sospechoso(db, data.empresa_id, data.banco, data.fecha, data.total)
+        if sospechoso:
+            raise TraspasoSospechosoError(sospechoso)
+
     ultimo = db.query(func.max(MovBanco.numero)).filter(
         MovBanco.empresa_id == data.empresa_id,
         MovBanco.banco == data.banco,
@@ -412,7 +455,7 @@ def create_movimiento(db: Session, data: MovimientoCreate) -> MovBanco:
     for banco_num in bancos_a_recalc:
         _recalcular_saldos(db, data.empresa_id, banco_num)
 
-    registrar_operacion(db, data.empresa_id, 'mov_bancos', mov.uuid, 'C', data.model_dump(mode='json'))
+    registrar_operacion(db, data.empresa_id, 'mov_bancos', mov.uuid, 'C', data.model_dump(exclude={'forzar'}, mode='json'))
     db.commit()
     db.refresh(mov)
     mov.pagos = db.query(Pago).filter(

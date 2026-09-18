@@ -14,6 +14,25 @@ from app.services import bancos as svc
 router = APIRouter(prefix="/api/bancos", tags=["bancos"])
 
 
+def _detalle_traspaso_sospechoso(db: Session, mov) -> dict:
+    from app.models.bancos import Banco as BancoModel
+    banco_obj = db.query(BancoModel).filter(
+        BancoModel.empresa_id == mov.empresa_id,
+        BancoModel.numero == mov.banco,
+    ).first()
+    nombre_banco = banco_obj.nombre if banco_obj else f"banco {mov.banco}"
+    fecha_txt = mov.fecha.strftime('%d/%m/%Y') if mov.fecha else 'sin fecha'
+    return {
+        "traspaso_sospechoso": True,
+        "mensaje": (
+            f"Ya existe un movimiento sin enlazar en \"{nombre_banco}\" con importe "
+            f"opuesto ({float(mov.total or 0):.2f} €) el {fecha_txt} "
+            f"(\"{mov.texto or ''}\"). Si es el mismo traspaso, indícalo con el campo "
+            f"\"banco destino\" en vez de darlo de alta por separado en cada caja."
+        ),
+    }
+
+
 def _enrich_movs(movs, db: Session) -> list[MovimientoRead]:
     """Serializa movimientos enriqueciendo cada pago con datos del documento y entidad.
     Hace las búsquedas en LOTE (una consulta por tipo de entidad para toda la página);
@@ -199,7 +218,10 @@ def obtener_movimiento(mov_id: int, db: Session = Depends(get_db)):
 
 @router.post("/movimientos", response_model=MovimientoRead, status_code=201)
 def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db)):
-    return _enrich_mov(svc.create_movimiento(db, data), db)
+    try:
+        return _enrich_mov(svc.create_movimiento(db, data), db)
+    except svc.TraspasoSospechosoError as e:
+        raise HTTPException(409, detail=_detalle_traspaso_sospechoso(db, e.mov))
 
 
 @router.put("/movimientos/{mov_id}", response_model=MovimientoRead)

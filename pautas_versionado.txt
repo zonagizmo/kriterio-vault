@@ -1,0 +1,214 @@
+# Reglas obligatorias para realizar cambios en la aplicación
+
+Estas reglas deben cumplirse **siempre y sin excepciones** antes, durante y después de realizar cualquier modificación en la aplicación.
+
+## 1. Analizar antes de modificar
+
+Antes de tocar cualquier código:
+
+* Analiza cómo funciona actualmente la aplicación.
+* Identifica los archivos, módulos, componentes, bases de datos y configuraciones que pueden verse afectados.
+* Comprueba las dependencias entre las diferentes partes de la aplicación.
+* Determina si el cambio puede provocar efectos secundarios o incompatibilidades.
+* No modifiques código hasta haber identificado claramente qué se va a cambiar y por qué.
+
+Si existe alguna duda sobre el funcionamiento actual, **detente y analiza primero en lugar de hacer cambios a ciegas**.
+
+---
+
+## 2. Crear un punto de restauración antes de cada cambio
+
+**Antes de modificar cualquier archivo de código, configuración o estructura de datos, debe crearse obligatoriamente un punto de restauración de la versión actual.**
+
+Preferentemente mediante Git:
+
+1. Comprobar el estado actual del repositorio.
+2. Asegurarse de que los cambios existentes están identificados.
+3. Crear un commit con el estado funcional actual.
+4. Etiquetar la versión actual cuando corresponda.
+5. Solo después comenzar a modificar el código.
+
+La versión anterior debe poder recuperarse completamente si el nuevo cambio provoca problemas.
+
+**Nunca se debe modificar directamente una versión estable sin conservar previamente un punto de restauración.**
+
+---
+
+## 3. Incrementar la versión
+
+Cada modificación debe generar una nueva versión de la aplicación.
+
+Utilizar el sistema:
+
+**MAJOR.MINOR.PATCH**
+
+* **MAJOR** → cambios importantes que pueden romper compatibilidad o modificar sustancialmente la aplicación.
+* **MINOR** → incorporación de nuevas funcionalidades compatibles con la versión existente.
+* **PATCH** → correcciones de errores, pequeños ajustes y mejoras menores.
+
+Ejemplo:
+
+`1.4.2 → 1.4.3` — corrección de errores
+`1.4.3 → 1.5.0` — nueva funcionalidad
+`1.5.0 → 2.0.0` — cambio estructural importante
+
+El número de versión debe actualizarse también en todos los lugares de la aplicación donde corresponda.
+
+---
+
+## 4. Realizar el cambio de forma controlada
+
+Una vez creado el punto de restauración:
+
+* Realiza únicamente el cambio previsto.
+* Evita modificar código que no sea necesario para conseguir el objetivo.
+* No introduzcas funcionalidades adicionales no solicitadas.
+* Mantén la estructura existente siempre que sea posible.
+* Si durante el desarrollo descubres que es necesario modificar otra parte de la aplicación, analiza primero el impacto antes de hacerlo.
+
+**No mezcles cambios independientes en una misma versión si pueden mantenerse separados.**
+
+---
+
+## 5. Comprobar la aplicación
+
+Después de realizar el cambio, comprueba como mínimo:
+
+* Que la aplicación inicia correctamente.
+* Que la funcionalidad modificada funciona.
+* Que las funcionalidades relacionadas siguen funcionando.
+* Que no aparecen errores nuevos.
+* Que la base de datos sigue funcionando correctamente.
+* Que no se han roto otras partes de la aplicación.
+
+Si existe un sistema de pruebas, ejecútalo.
+
+Si no existe, realiza las comprobaciones necesarias para verificar manualmente el cambio.
+
+---
+
+## 6. Crear el commit de la nueva versión
+
+Una vez comprobado que el cambio funciona correctamente:
+
+1. Registrar los archivos modificados.
+2. Crear un commit con los cambios.
+3. Asociar el commit con la nueva versión.
+4. Crear un tag de Git para la versión cuando corresponda.
+
+Ejemplo:
+
+`v1.4.2` → versión anterior estable
+`v1.4.3` → nueva versión después del cambio
+
+El mensaje del commit debe describir claramente el cambio realizado.
+
+---
+
+## 7. Generar automáticamente el CHANGELOG
+
+**Después de cada cambio debe actualizarse automáticamente el CHANGELOG de la aplicación.**
+
+Cada entrada debe incluir:
+
+### Versión
+
+Número de versión.
+
+### Fecha
+
+Fecha en la que se creó la versión.
+
+### Añadido
+
+Nuevas funcionalidades.
+
+### Modificado
+
+Cambios realizados sobre funcionalidades existentes.
+
+### Corregido
+
+Errores solucionados.
+
+### Eliminado
+
+Funcionalidades o elementos eliminados.
+
+### Impacto
+
+Información relevante sobre cambios en:
+
+* Base de datos.
+* Configuración.
+* Dependencias.
+* Migraciones.
+* Compatibilidad.
+
+Ejemplo:
+
+```text
+# CHANGELOG
+
+## [1.4.3] - 2026-09-18
+
+### Corregido
+- Corregido el error que impedía guardar correctamente los expedientes.
+
+### Modificado
+- Mejorado el sistema de validación de datos.
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.4.2.
+```
+
+El CHANGELOG debe reflejar **únicamente los cambios realizados en esa versión**.
+
+---
+
+## 8. Si el cambio falla
+
+Si después de realizar un cambio aparecen errores importantes o la aplicación deja de funcionar:
+
+1. No continuar desarrollando nuevas funcionalidades.
+2. Identificar qué cambio ha provocado el problema.
+3. Intentar corregirlo.
+4. Si no es posible solucionarlo de forma segura, restaurar la versión anterior mediante el commit/tag creado antes del cambio.
+5. Comprobar que la aplicación vuelve a funcionar.
+6. Documentar el problema.
+
+**Nunca sacrificar una versión estable para mantener un cambio que no funciona correctamente.**
+
+---
+
+## 9. Regla de trazabilidad
+
+En todo momento debe ser posible responder a estas preguntas:
+
+* ¿Qué versión está instalada?
+* ¿Cuál era la versión anterior?
+* ¿Qué se modificó?
+* ¿Cuándo se modificó?
+* ¿Qué archivos se modificaron?
+* ¿Qué commit contiene el cambio?
+* ¿Qué versión había antes del cambio?
+* ¿Cómo puedo volver a la versión anterior?
+
+El historial de Git y el CHANGELOG deben permitir reconstruir la evolución de la aplicación.
+
+---
+
+# Regla fundamental
+
+**NINGÚN CAMBIO DEBE REALIZARSE SIN VERSIONAR PREVIAMENTE EL ESTADO ACTUAL.**
+
+El flujo obligatorio será:
+
+**Analizar → Crear punto de restauración → Incrementar versión → Modificar → Probar → Commit → Tag → Actualizar CHANGELOG → Confirmar versión estable**
+
+Si alguna de estas etapas no puede realizarse correctamente, **detener el proceso antes de continuar con nuevos cambios**.
+
+
