@@ -2,10 +2,17 @@
 Lógica compartida para albaranes, facturas y presupuestos.
 Todos comparten el mismo modelo de cabecera + líneas (apuntes).
 """
+import time
+import logging
 import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.facturacion import Apunte
+
+logger = logging.getLogger(__name__)
+
+MAX_INTENTOS_NUMERACION = 5
+ESPERA_REINTENTO = 0.05  # segundos, base entre reintentos
 
 
 # ─── Tipos de documento ───────────────────────────────────────────────────────
@@ -27,20 +34,43 @@ def calcular_importe_linea(cantidad: float, precio: float,
 
 
 def siguiente_numero(db: Session, modelo, empresa_id: int) -> int:
-    return (db.query(func.max(modelo.numero)).filter(
-        modelo.empresa_id == empresa_id
-    ).scalar() or 0) + 1
+    """Calcula el siguiente número secuencial para un modelo, con protección
+    contra race conditions mediante reintento automático ante IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+    for intento in range(MAX_INTENTOS_NUMERACION):
+        try:
+            numero = (db.query(func.max(modelo.numero)).filter(
+                modelo.empresa_id == empresa_id
+            ).scalar() or 0) + 1
+            return numero
+        except IntegrityError:
+            db.rollback()
+            if intento < MAX_INTENTOS_NUMERACION - 1:
+                time.sleep(ESPERA_REINTENTO * (2 ** intento))
+                continue
+            raise
 
 
 def siguiente_cnumero(db: Session, modelo, empresa_id: int, fecha: datetime.date,
                       tiponum: str = 'N') -> tuple[str, int]:
-    anio = fecha.year
-    ultimo = db.query(func.max(modelo.cnumero)).filter(
-        modelo.empresa_id == empresa_id,
-        func.extract('year', modelo.fecha) == anio,
-        modelo.tiponum == tiponum,
-    ).scalar() or 0
-    return tiponum, ultimo + 1
+    """Calcula el siguiente cnumero (nº por año/tipo), con protección contra
+    race conditions mediante reintento automático ante IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+    for intento in range(MAX_INTENTOS_NUMERACION):
+        try:
+            anio = fecha.year
+            ultimo = db.query(func.max(modelo.cnumero)).filter(
+                modelo.empresa_id == empresa_id,
+                func.extract('year', modelo.fecha) == anio,
+                modelo.tiponum == tiponum,
+            ).scalar() or 0
+            return tiponum, ultimo + 1
+        except IntegrityError:
+            db.rollback()
+            if intento < MAX_INTENTOS_NUMERACION - 1:
+                time.sleep(ESPERA_REINTENTO * (2 ** intento))
+                continue
+            raise
 
 
 def guardar_lineas(db: Session, empresa_id: int, albaran: int,

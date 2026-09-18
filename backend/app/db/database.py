@@ -20,6 +20,8 @@ def _set_sqlite_pragma(dbapi_connection, _):
     if isinstance(dbapi_connection, sqlite3.Connection):
         cur = dbapi_connection.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
+        cur.execute("PRAGMA busy_timeout=5000")
+        cur.execute("PRAGMA journal_mode=WAL")
         cur.close()
 
 

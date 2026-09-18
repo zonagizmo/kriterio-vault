@@ -1,9 +1,14 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.models.contabilidad import Extra, ExApunte
 from app.models.clientes_proveedores import Vencimiento
 from app.schemas.extras import ExtraCreate, ExtraUpdate, ExtraPagoInfo
 from app.services.sync import registrar_operacion
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _cargar_apuntes(db, empresa_id, extra_numero):
@@ -115,52 +120,60 @@ def _crear_apuntes(db, empresa_id, extra_numero, apuntes_data):
 
 
 def create_extra(db: Session, data: ExtraCreate) -> Extra:
-    ultimo = db.query(func.max(Extra.numero)).filter(
-        Extra.empresa_id == data.empresa_id
-    ).scalar() or 0
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Extra.numero)).filter(
+                Extra.empresa_id == data.empresa_id
+            ).scalar() or 0
 
-    extra = Extra(
-        empresa_id=data.empresa_id,
-        numero=ultimo + 1,
-        fecha=data.fecha,
-        tipo=data.tipo,
-        texto=data.texto,
-        grupo=data.grupo,
-        clave=data.clave,
-        estado=data.estado,
-        notas=data.notas,
-    )
-    db.add(extra)
-    db.flush()
+            extra = Extra(
+                empresa_id=data.empresa_id,
+                numero=ultimo + 1,
+                fecha=data.fecha,
+                tipo=data.tipo,
+                texto=data.texto,
+                grupo=data.grupo,
+                clave=data.clave,
+                estado=data.estado,
+                notas=data.notas,
+            )
+            db.add(extra)
+            db.flush()
 
-    _crear_apuntes(db, data.empresa_id, extra.numero, data.apuntes)
-    db.flush()  # necesario: autoflush=False, generar_asiento_extra hace query de ExApuntes
+            _crear_apuntes(db, data.empresa_id, extra.numero, data.apuntes)
+            db.flush()
 
-    if data.generar_vto and data.vto_importe:
-        from app.services.bancos import siguiente_numero_vencimiento
-        vto = Vencimiento(
-            empresa_id=data.empresa_id,
-            numero=siguiente_numero_vencimiento(db, data.empresa_id),
-            tipo='X',
-            tpnumero=extra.numero,
-            fecha=data.vto_fecha or data.fecha,
-            importe=data.vto_importe,
-            pendiente=data.vto_importe,
-            cuentadef=data.vto_cuenta,
-        )
-        db.add(vto)
+            if data.generar_vto and data.vto_importe:
+                from app.services.bancos import siguiente_numero_vencimiento
+                vto = Vencimiento(
+                    empresa_id=data.empresa_id,
+                    numero=siguiente_numero_vencimiento(db, data.empresa_id),
+                    tipo='X',
+                    tpnumero=extra.numero,
+                    fecha=data.vto_fecha or data.fecha,
+                    importe=data.vto_importe,
+                    pendiente=data.vto_importe,
+                    cuentadef=data.vto_cuenta,
+                )
+                db.add(vto)
 
-    from app.services.contabilidad import generar_asiento_extra
-    generar_asiento_extra(db, data.empresa_id, extra)
+            from app.services.contabilidad import generar_asiento_extra
+            generar_asiento_extra(db, data.empresa_id, extra)
 
-    registrar_operacion(db, data.empresa_id, 'extras', extra.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(extra)
-    extra.apuntes = _cargar_apuntes(db, data.empresa_id, extra.numero)
-    extra.pago_info = _cargar_pago_info(db, data.empresa_id, extra.numero) if extra.estado == 'C' else None
-    extra.fecha_vto = _cargar_fecha_vto(db, data.empresa_id, extra.numero) if extra.estado != 'C' else None
-    extra.tiene_vencimiento = _tiene_vencimiento(db, data.empresa_id, extra.numero)
-    return extra
+            registrar_operacion(db, data.empresa_id, 'extras', extra.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(extra)
+            extra.apuntes = _cargar_apuntes(db, data.empresa_id, extra.numero)
+            extra.pago_info = _cargar_pago_info(db, data.empresa_id, extra.numero) if extra.estado == 'C' else None
+            extra.fecha_vto = _cargar_fecha_vto(db, data.empresa_id, extra.numero) if extra.estado != 'C' else None
+            extra.tiene_vencimiento = _tiene_vencimiento(db, data.empresa_id, extra.numero)
+            return extra
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_extra(db: Session, extra_id: int, data: ExtraUpdate) -> Extra | None:

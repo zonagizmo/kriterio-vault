@@ -1,9 +1,14 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from app.models.clientes_proveedores import Cliente
 from app.models.contabilidad import Cuenta
 from app.schemas.clientes_proveedores import ClienteCreate, ClienteUpdate
 from app.services.sync import registrar_operacion
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _cuenta_cliente(db: Session, empresa_id: int, numero: int) -> str:
@@ -40,29 +45,37 @@ def get_cliente(db: Session, cliente_id: int):
 
 
 def create_cliente(db: Session, data: ClienteCreate) -> Cliente:
-    ultimo = db.query(func.max(Cliente.numero)).filter(
-        Cliente.empresa_id == data.empresa_id
-    ).scalar() or 0
-    numero = ultimo + 1
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Cliente.numero)).filter(
+                Cliente.empresa_id == data.empresa_id
+            ).scalar() or 0
+            numero = ultimo + 1
 
-    payload = data.model_dump()
-    if not payload.get("cuenta"):
-        payload["cuenta"] = _cuenta_cliente(db, data.empresa_id, numero)
+            payload = data.model_dump()
+            if not payload.get("cuenta"):
+                payload["cuenta"] = _cuenta_cliente(db, data.empresa_id, numero)
 
-    cliente = Cliente(**payload, numero=numero)
-    db.add(cliente)
+            cliente = Cliente(**payload, numero=numero)
+            db.add(cliente)
 
-    existe = db.query(Cuenta).filter(
-        Cuenta.empresa_id == data.empresa_id, Cuenta.cuenta == cliente.cuenta
-    ).first()
-    if not existe:
-        db.add(Cuenta(empresa_id=data.empresa_id, cuenta=cliente.cuenta, texto=(data.nombre or "").strip()))
+            existe = db.query(Cuenta).filter(
+                Cuenta.empresa_id == data.empresa_id, Cuenta.cuenta == cliente.cuenta
+            ).first()
+            if not existe:
+                db.add(Cuenta(empresa_id=data.empresa_id, cuenta=cliente.cuenta, texto=(data.nombre or "").strip()))
 
-    db.flush()
-    registrar_operacion(db, data.empresa_id, 'clientes', cliente.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(cliente)
-    return cliente
+            db.flush()
+            registrar_operacion(db, data.empresa_id, 'clientes', cliente.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(cliente)
+            return cliente
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_cliente(db: Session, cliente_id: int, data: ClienteUpdate) -> Cliente | None:

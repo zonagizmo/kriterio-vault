@@ -1,10 +1,14 @@
 from collections import defaultdict
+import time
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, or_
 from app.models.contabilidad import Cuenta, Diario
 from app.schemas.contabilidad import CuentaCreate, CuentaUpdate, AsientoCreate
 from app.services.sync import registrar_operacion
 import datetime
+
+logger = logging.getLogger(__name__)
 
 
 # ─── Plan de cuentas ─────────────────────────────────────────────────────────
@@ -108,9 +112,19 @@ def delete_cuenta(db: Session, cuenta_id: int) -> bool:
 # ─── Asientos del diario ──────────────────────────────────────────────────────
 
 def _siguiente_asiento(db: Session, empresa_id: int) -> int:
-    return (db.query(func.max(Diario.asiento)).filter(
-        Diario.empresa_id == empresa_id
-    ).scalar() or 0) + 1
+    """Siguiente número de asiento con protección contra race conditions."""
+    from sqlalchemy.exc import IntegrityError
+    for intento in range(5):
+        try:
+            return (db.query(func.max(Diario.asiento)).filter(
+                Diario.empresa_id == empresa_id
+            ).scalar() or 0) + 1
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def _build_asiento(lines: list) -> dict:

@@ -1,9 +1,14 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from app.models.clientes_proveedores import Proveedor
 from app.models.contabilidad import Cuenta
 from app.schemas.clientes_proveedores import ProveedorCreate, ProveedorUpdate
 from app.services.sync import registrar_operacion
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _cuenta_proveedor(db: Session, empresa_id: int, numero: int) -> str:
@@ -40,29 +45,37 @@ def get_proveedor(db: Session, proveedor_id: int):
 
 
 def create_proveedor(db: Session, data: ProveedorCreate) -> Proveedor:
-    ultimo = db.query(func.max(Proveedor.numero)).filter(
-        Proveedor.empresa_id == data.empresa_id
-    ).scalar() or 0
-    numero = ultimo + 1
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Proveedor.numero)).filter(
+                Proveedor.empresa_id == data.empresa_id
+            ).scalar() or 0
+            numero = ultimo + 1
 
-    payload = data.model_dump()
-    if not payload.get("cuenta"):
-        payload["cuenta"] = _cuenta_proveedor(db, data.empresa_id, numero)
+            payload = data.model_dump()
+            if not payload.get("cuenta"):
+                payload["cuenta"] = _cuenta_proveedor(db, data.empresa_id, numero)
 
-    proveedor = Proveedor(**payload, numero=numero)
-    db.add(proveedor)
+            proveedor = Proveedor(**payload, numero=numero)
+            db.add(proveedor)
 
-    existe = db.query(Cuenta).filter(
-        Cuenta.empresa_id == data.empresa_id, Cuenta.cuenta == proveedor.cuenta
-    ).first()
-    if not existe:
-        db.add(Cuenta(empresa_id=data.empresa_id, cuenta=proveedor.cuenta, texto=(data.nombre or "").strip()))
+            existe = db.query(Cuenta).filter(
+                Cuenta.empresa_id == data.empresa_id, Cuenta.cuenta == proveedor.cuenta
+            ).first()
+            if not existe:
+                db.add(Cuenta(empresa_id=data.empresa_id, cuenta=proveedor.cuenta, texto=(data.nombre or "").strip()))
 
-    db.flush()
-    registrar_operacion(db, data.empresa_id, 'proveedores', proveedor.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(proveedor)
-    return proveedor
+            db.flush()
+            registrar_operacion(db, data.empresa_id, 'proveedores', proveedor.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(proveedor)
+            return proveedor
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_proveedor(db: Session, proveedor_id: int, data: ProveedorUpdate) -> Proveedor | None:

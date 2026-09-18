@@ -1,8 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.models.facturacion import Familia
 from app.schemas.facturacion import FamiliaCreate, FamiliaUpdate
 from app.services.sync import registrar_operacion
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_familias(db: Session, empresa_id: int):
@@ -16,16 +21,24 @@ def get_familia(db: Session, familia_id: int):
 
 
 def create_familia(db: Session, data: FamiliaCreate) -> Familia:
-    ultimo = db.query(func.max(Familia.numero)).filter(
-        Familia.empresa_id == data.empresa_id
-    ).scalar() or 0
-    familia = Familia(**data.model_dump(), numero=ultimo + 1)
-    db.add(familia)
-    db.flush()
-    registrar_operacion(db, data.empresa_id, 'familias', familia.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(familia)
-    return familia
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Familia.numero)).filter(
+                Familia.empresa_id == data.empresa_id
+            ).scalar() or 0
+            familia = Familia(**data.model_dump(), numero=ultimo + 1)
+            db.add(familia)
+            db.flush()
+            registrar_operacion(db, data.empresa_id, 'familias', familia.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(familia)
+            return familia
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_familia(db: Session, familia_id: int, data: FamiliaUpdate) -> Familia | None:

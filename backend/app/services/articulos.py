@@ -1,8 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from app.models.facturacion import Articulo
 from app.schemas.facturacion import ArticuloCreate, ArticuloUpdate
 from app.services.sync import registrar_operacion
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_articulos(db: Session, empresa_id: int, q: str = "", familia: int = None,
@@ -29,16 +34,24 @@ def get_articulo(db: Session, articulo_id: int):
 
 
 def create_articulo(db: Session, data: ArticuloCreate) -> Articulo:
-    ultimo = db.query(func.max(Articulo.numero)).filter(
-        Articulo.empresa_id == data.empresa_id
-    ).scalar() or 0
-    articulo = Articulo(**data.model_dump(), numero=ultimo + 1)
-    db.add(articulo)
-    db.flush()
-    registrar_operacion(db, data.empresa_id, 'articulos', articulo.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(articulo)
-    return articulo
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Articulo.numero)).filter(
+                Articulo.empresa_id == data.empresa_id
+            ).scalar() or 0
+            articulo = Articulo(**data.model_dump(), numero=ultimo + 1)
+            db.add(articulo)
+            db.flush()
+            registrar_operacion(db, data.empresa_id, 'articulos', articulo.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(articulo)
+            return articulo
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_articulo(db: Session, articulo_id: int, data: ArticuloUpdate) -> Articulo | None:

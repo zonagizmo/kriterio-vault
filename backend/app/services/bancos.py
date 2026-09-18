@@ -1,12 +1,17 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.models.bancos import Banco, MovBanco, Pago
 from app.models.clientes_proveedores import Vencimiento
 from app.models.facturacion import FacturaEmitida, FacturaRecibida
 from app.schemas.bancos import BancoCreate, BancoUpdate, MovimientoCreate, MovimientoUpdate, VencimientoCreate, VencimientoUpdate
 from app.services import contabilidad as cont_svc
 from app.services.sync import registrar_operacion
+import time
+import logging
 import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class TraspasoSospechosoError(Exception):
@@ -50,15 +55,24 @@ def siguiente_numero_vencimiento(db: Session, empresa_id: int) -> int:
     """Siguiente número de vencimiento para la empresa.
     Considera también los pagos que referencian vencimientos ya borrados: si se
     reutilizara uno de esos números, el vencimiento nuevo 'heredaría' pagos de un
-    documento distinto y nacería total o parcialmente pagado."""
-    max_vto = db.query(func.max(Vencimiento.numero)).filter(
-        Vencimiento.empresa_id == empresa_id,
-    ).scalar() or 0
-    max_pago = db.query(func.max(Pago.vto)).filter(
-        Pago.empresa_id == empresa_id,
-        Pago.vto.isnot(None),
-    ).scalar() or 0
-    return max(int(max_vto), int(max_pago)) + 1
+    documento distinto y nacería total o parcialmente pagado.
+    Protegido contra race conditions con reintento automático."""
+    for intento in range(5):
+        try:
+            max_vto = db.query(func.max(Vencimiento.numero)).filter(
+                Vencimiento.empresa_id == empresa_id,
+            ).scalar() or 0
+            max_pago = db.query(func.max(Pago.vto)).filter(
+                Pago.empresa_id == empresa_id,
+                Pago.vto.isnot(None),
+            ).scalar() or 0
+            return max(int(max_vto), int(max_pago)) + 1
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def _aplicar_pago_pendiente(vto, importe_pago):
@@ -127,21 +141,29 @@ def get_banco(db: Session, banco_id: int):
 
 
 def create_banco(db: Session, data: BancoCreate) -> Banco:
-    ultimo = db.query(func.max(Banco.numero)).filter(
-        Banco.empresa_id == data.empresa_id
-    ).scalar() or 0
-    banco = Banco(
-        **data.model_dump(exclude={'saldoini'}),
-        numero=ultimo + 1,
-        saldoini=data.saldoini or 0,
-        saldoact=0,
-    )
-    db.add(banco)
-    db.flush()
-    registrar_operacion(db, data.empresa_id, 'bancos', banco.uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
-    db.refresh(banco)
-    return banco
+    for intento in range(5):
+        try:
+            ultimo = db.query(func.max(Banco.numero)).filter(
+                Banco.empresa_id == data.empresa_id
+            ).scalar() or 0
+            banco = Banco(
+                **data.model_dump(exclude={'saldoini'}),
+                numero=ultimo + 1,
+                saldoini=data.saldoini or 0,
+                saldoact=0,
+            )
+            db.add(banco)
+            db.flush()
+            registrar_operacion(db, data.empresa_id, 'bancos', banco.uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
+            db.refresh(banco)
+            return banco
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_banco(db: Session, banco_id: int, data: BancoUpdate) -> Banco | None:
@@ -283,7 +305,23 @@ def _find_counterpart(db, empresa_id, pd, banco_origen, numero_origen):
 
 def _crear_mov_contraparte(db, empresa_id, banco_origen, numero_origen,
                            dest_banco, fecha, texto, importe_dest, notas, estado):
-    """Crea el movimiento espejo en el banco destino de una transferencia."""
+    """Crea el movimiento espejo en el banco destino de una transferencia.
+    Protegido contra race conditions con reintento automático."""
+    for intento in range(5):
+        try:
+            return _crear_mov_contraparte_inner(
+                db, empresa_id, banco_origen, numero_origen,
+                dest_banco, fecha, texto, importe_dest, notas, estado)
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
+
+
+def _crear_mov_contraparte_inner(db, empresa_id, banco_origen, numero_origen,
+                                 dest_banco, fecha, texto, importe_dest, notas, estado):
     ultimo = db.query(func.max(MovBanco.numero)).filter(
         MovBanco.empresa_id == empresa_id,
         MovBanco.banco == dest_banco,
@@ -333,21 +371,43 @@ def _crear_mov_contraparte(db, empresa_id, banco_origen, numero_origen,
 
 
 def _cnumero_mov(db, empresa_id, banco, fecha, total):
-    anio = fecha.year
-    tiponum = 'I' if total >= 0 else 'O'
-    fecha_ini = datetime.date(anio, 1, 1)
-    fecha_fin = datetime.date(anio, 12, 31)
-    ultimo = db.query(func.max(MovBanco.cnumero)).filter(
-        MovBanco.empresa_id == empresa_id,
-        MovBanco.banco == banco,
-        MovBanco.tiponum == tiponum,
-        MovBanco.fecha >= fecha_ini,
-        MovBanco.fecha <= fecha_fin,
-    ).scalar() or 0
-    return tiponum, ultimo + 1
+    """Calcula el cnumero (nº secundario por año/tipo) de un movimiento bancario.
+    Protegido contra race conditions con reintento automático."""
+    for intento in range(5):
+        try:
+            anio = fecha.year
+            tiponum = 'I' if total >= 0 else 'O'
+            fecha_ini = datetime.date(anio, 1, 1)
+            fecha_fin = datetime.date(anio, 12, 31)
+            ultimo = db.query(func.max(MovBanco.cnumero)).filter(
+                MovBanco.empresa_id == empresa_id,
+                MovBanco.banco == banco,
+                MovBanco.tiponum == tiponum,
+                MovBanco.fecha >= fecha_ini,
+                MovBanco.fecha <= fecha_fin,
+            ).scalar() or 0
+            return tiponum, ultimo + 1
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def create_movimiento(db: Session, data: MovimientoCreate) -> MovBanco:
+    for intento in range(5):
+        try:
+            return _create_movimiento_inner(db, data)
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
+
+
+def _create_movimiento_inner(db: Session, data: MovimientoCreate) -> MovBanco:
     tiene_transferencia = any(pd.bancot for pd in data.pagos)
     if not tiene_transferencia and not data.forzar:
         sospechoso = _buscar_traspaso_sospechoso(db, data.empresa_id, data.banco, data.fecha, data.total)

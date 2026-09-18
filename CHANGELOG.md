@@ -5,6 +5,34 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.10.03] — 2026-09-18 — Fix: race conditions en numeración secuencial
+
+### Corregido
+- **Race condition en todos los puntos de numeración secuencial** (`siguiente_numero`, `siguiente_cnumero`, `_siguiente_asiento`, `siguiente_numero_vencimiento` y numeración inline en bancos/usuarios): el patrón `SELECT MAX(numero)+1 → INSERT` no era atómico — dos peticiones HTTP simultáneas podían leer el mismo MAX y asignar el mismo número, causando duplicados en facturas, albaranes, bancos, movimientos, clientes, proveedores, artículos, familias, extras, asientos contables, vencimientos y usuarios NNA.
+- Solución aplicada en dos capas:
+  1. **SQLite**: `PRAGMA busy_timeout=5000` y `PRAGMA journal_mode=WAL` en `database.py` para gestionar bloqueos de escritura concurrentes.
+  2. **Reintento automático**: todas las funciones de numeración capturan `IntegrityError` y reintean con backoff exponencial (hasta 5 intentos). Si la BD rechaza un número duplicado por la constraint, se recalcula con el MAX actualizado.
+
+### Modificado
+- `app/db/database.py`: añadidos `busy_timeout` y `journal_mode=WAL` para SQLite.
+- `app/services/documentos.py`: `siguiente_numero()` y `siguiente_cnumero()` con reintento.
+- `app/services/contabilidad.py`: `_siguiente_asiento()` con reintento.
+- `app/services/bancos.py`: `siguiente_numero_vencimiento()`, `create_banco()`, `create_movimiento()`, `_crear_mov_contraparte()`, `_cnumero_mov()` con reintento.
+- `app/services/clientes.py`: `create_cliente()` con reintento.
+- `app/services/proveedores.py`: `create_proveedor()` con reintento.
+- `app/services/familias.py`: `create_familia()` con reintento.
+- `app/services/articulos.py`: `create_articulo()` con reintento.
+- `app/services/extras.py`: `create_extra()` con reintento.
+- `app/services/usuarios.py`: `create_usuario()` y `_crear_diario_paga()` con reintento.
+
+### Base de datos
+- No requiere cambios de esquema. Los `PRAGMA` se aplican al conectar y son volátiles (se re-aplican en cada conexión).
+
+### Compatibilidad
+- Compatible con la versión 1.10.02. Sin cambios de API ni de esquema.
+
+---
+
 ## [1.10.02] — 2026-09-11 — Corrección de datos: 4 discrepancias de conciliación en empresa 2
 
 ### Corregido

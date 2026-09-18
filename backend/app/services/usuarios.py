@@ -1,11 +1,16 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from app.models.usuarios import UsuarioNNA, PagaNNA
 from app.models.clientes_proveedores import Vencimiento
 from app.schemas.usuarios import UsuarioCreate, UsuarioUpdate, PagaCreate, RegistroMensualCreate
 from app.services.sync import registrar_operacion
+import time
+import logging
 import datetime
 import uuid as uuid_lib
+
+logger = logging.getLogger(__name__)
 
 
 def _cuenta_nna(numero: int) -> str:
@@ -40,57 +45,65 @@ def get_saldos_nna(db: Session, empresa_id: int) -> dict:
 
 
 def create_usuario(db: Session, data: UsuarioCreate) -> dict:
-    numero = db.execute(text(
-        "SELECT COALESCE(MAX(numero), 0) + 1 FROM usuarios_nna WHERE empresa_id = :e"
-    ), {"e": data.empresa_id}).scalar()
-    cuenta = _cuenta_nna(numero)
-    nombre = (data.nombre or '').strip()
-    # INSERT crudo (no ORM): hay que rellenar a mano las columnas de sync, ya que
-    # el default de SyncMixin solo se aplica al instanciar el modelo por SQLAlchemy.
-    nuevo_uuid = str(uuid_lib.uuid4())
-    ahora = datetime.datetime.utcnow()
+    for intento in range(5):
+        try:
+            numero = db.execute(text(
+                "SELECT COALESCE(MAX(numero), 0) + 1 FROM usuarios_nna WHERE empresa_id = :e"
+            ), {"e": data.empresa_id}).scalar()
+            cuenta = _cuenta_nna(numero)
+            nombre = (data.nombre or '').strip()
+            # INSERT crudo (no ORM): hay que rellenar a mano las columnas de sync, ya que
+            # el default de SyncMixin solo se aplica al instanciar el modelo por SQLAlchemy.
+            nuevo_uuid = str(uuid_lib.uuid4())
+            ahora = datetime.datetime.utcnow()
 
-    db.execute(text("""
-        INSERT INTO usuarios_nna
-            (empresa_id, numero, nombre, apellidos, fecha_nacimiento,
-             fecha_ingreso, fecha_salida, paga_mensual, activo, notas,
-             uuid, version, created_at, updated_at)
-        VALUES (:e, :n, :nom, :ap, :fn, :fi, :fs, :ps, :act, :notas,
-                :uuid, 1, :ahora, :ahora)
-    """), {
-        "e": data.empresa_id, "n": numero, "nom": nombre,
-        "ap": getattr(data, 'apellidos', None),
-        "fn": getattr(data, 'fecha_nacimiento', None),
-        "fi": getattr(data, 'fecha_ingreso', None),
-        "fs": getattr(data, 'fecha_salida', None),
-        "ps": data.paga_mensual or 0,
-        "act": 1 if getattr(data, 'activo', True) else 0,
-        "notas": getattr(data, 'notas', None),
-        "uuid": nuevo_uuid, "ahora": ahora,
-    })
+            db.execute(text("""
+                INSERT INTO usuarios_nna
+                    (empresa_id, numero, nombre, apellidos, fecha_nacimiento,
+                     fecha_ingreso, fecha_salida, paga_mensual, activo, notas,
+                     uuid, version, created_at, updated_at)
+                VALUES (:e, :n, :nom, :ap, :fn, :fi, :fs, :ps, :act, :notas,
+                        :uuid, 1, :ahora, :ahora)
+            """), {
+                "e": data.empresa_id, "n": numero, "nom": nombre,
+                "ap": getattr(data, 'apellidos', None),
+                "fn": getattr(data, 'fecha_nacimiento', None),
+                "fi": getattr(data, 'fecha_ingreso', None),
+                "fs": getattr(data, 'fecha_salida', None),
+                "ps": data.paga_mensual or 0,
+                "act": 1 if getattr(data, 'activo', True) else 0,
+                "notas": getattr(data, 'notas', None),
+                "uuid": nuevo_uuid, "ahora": ahora,
+            })
 
-    # Crear la cuenta 4001xxx si no existe
-    existe = db.execute(text(
-        "SELECT id FROM cuentas WHERE empresa_id=:e AND cuenta=:c"
-    ), {"e": data.empresa_id, "c": cuenta}).scalar()
-    if not existe:
-        db.execute(text(
-            "INSERT INTO cuentas (empresa_id, cuenta, texto, marca, debe, haber) VALUES (:e, :c, :t, NULL, 0, 0)"
-        ), {"e": data.empresa_id, "c": cuenta, "t": nombre})
+            # Crear la cuenta 4001xxx si no existe
+            existe = db.execute(text(
+                "SELECT id FROM cuentas WHERE empresa_id=:e AND cuenta=:c"
+            ), {"e": data.empresa_id, "c": cuenta}).scalar()
+            if not existe:
+                db.execute(text(
+                    "INSERT INTO cuentas (empresa_id, cuenta, texto, marca, debe, haber) VALUES (:e, :c, :t, NULL, 0, 0)"
+                ), {"e": data.empresa_id, "c": cuenta, "t": nombre})
 
-    registrar_operacion(db, data.empresa_id, 'usuarios_nna', nuevo_uuid, 'C', data.model_dump(mode='json'))
-    db.commit()
+            registrar_operacion(db, data.empresa_id, 'usuarios_nna', nuevo_uuid, 'C', data.model_dump(mode='json'))
+            db.commit()
 
-    row = db.execute(text(
-        "SELECT id, empresa_id, numero, nombre, apellidos, fecha_nacimiento, "
-        "fecha_ingreso, fecha_salida, paga_mensual, activo, notas "
-        "FROM usuarios_nna WHERE empresa_id=:e AND numero=:n"
-    ), {"e": data.empresa_id, "n": numero}).fetchone()
-    return dict(zip(
-        ["id", "empresa_id", "numero", "nombre", "apellidos", "fecha_nacimiento",
-         "fecha_ingreso", "fecha_salida", "paga_mensual", "activo", "notas"],
-        row
-    ))
+            row = db.execute(text(
+                "SELECT id, empresa_id, numero, nombre, apellidos, fecha_nacimiento, "
+                "fecha_ingreso, fecha_salida, paga_mensual, activo, notas "
+                "FROM usuarios_nna WHERE empresa_id=:e AND numero=:n"
+            ), {"e": data.empresa_id, "n": numero}).fetchone()
+            return dict(zip(
+                ["id", "empresa_id", "numero", "nombre", "apellidos", "fecha_nacimiento",
+                 "fecha_ingreso", "fecha_salida", "paga_mensual", "activo", "notas"],
+                row
+            ))
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def update_usuario(db: Session, usuario_id: int, data: UsuarioUpdate) -> UsuarioNNA | None:
@@ -182,30 +195,40 @@ def get_pagas(db: Session, empresa_id: int, usuario: int = None,
 def _crear_diario_paga(db: Session, empresa_id: int, paga_id: int,
                        usuario_numero: int, fecha: datetime.date, importe: float):
     """Crea las dos líneas de diario para una paga NNA: DR 6780007 / CR 4001xxx.
-    Actualiza también la caché debe/haber de cuentas (usada por el diagnóstico)."""
-    asiento = db.execute(text(
-        "SELECT COALESCE(MAX(asiento), 0) + 1 FROM diario WHERE empresa_id=:e"
-    ), {"e": empresa_id}).scalar()
-    cuenta_nna = _cuenta_nna(usuario_numero)
-    clave = f"PAG{paga_id}"
-    imp = round(importe, 2)
+    Actualiza también la caché debe/haber de cuentas (usada por el diagnóstico).
+    Protegido contra race conditions con reintento automático."""
+    for intento in range(5):
+        try:
+            asiento = db.execute(text(
+                "SELECT COALESCE(MAX(asiento), 0) + 1 FROM diario WHERE empresa_id=:e"
+            ), {"e": empresa_id}).scalar()
+            cuenta_nna = _cuenta_nna(usuario_numero)
+            clave = f"PAG{paga_id}"
+            imp = round(importe, 2)
 
-    db.execute(text(
-        "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
-        " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, '6780007', 0)"
-    ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id, "imp": imp})
-    db.execute(text(
-        "UPDATE cuentas SET debe=ROUND(debe+:v,2) WHERE empresa_id=:e AND cuenta='6780007'"
-    ), {"v": imp, "e": empresa_id})
+            db.execute(text(
+                "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
+                " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, '6780007', 0)"
+            ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id, "imp": imp})
+            db.execute(text(
+                "UPDATE cuentas SET debe=ROUND(debe+:v,2) WHERE empresa_id=:e AND cuenta='6780007'"
+            ), {"v": imp, "e": empresa_id})
 
-    db.execute(text(
-        "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
-        " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, :cta, 0)"
-    ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id,
-        "imp": round(-importe, 2), "cta": cuenta_nna})
-    db.execute(text(
-        "UPDATE cuentas SET haber=ROUND(haber+:v,2) WHERE empresa_id=:e AND cuenta=:c"
-    ), {"v": imp, "e": empresa_id, "c": cuenta_nna})
+            db.execute(text(
+                "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
+                " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, :cta, 0)"
+            ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id,
+                "imp": round(-importe, 2), "cta": cuenta_nna})
+            db.execute(text(
+                "UPDATE cuentas SET haber=ROUND(haber+:v,2) WHERE empresa_id=:e AND cuenta=:c"
+            ), {"v": imp, "e": empresa_id, "c": cuenta_nna})
+            return
+        except IntegrityError:
+            db.rollback()
+            if intento < 4:
+                time.sleep(0.05 * (2 ** intento))
+                continue
+            raise
 
 
 def _borrar_diario_paga(db: Session, empresa_id: int, paga_id: int):
