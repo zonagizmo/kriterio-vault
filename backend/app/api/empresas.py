@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.empresas import Empresa
 from app.schemas.empresas import EmpresaRead, EmpresaUpdate
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/empresas", tags=["empresas"])
+router = APIRouter(prefix="/api/empresas", tags=["empresas"],
+                   dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=list[EmpresaRead])

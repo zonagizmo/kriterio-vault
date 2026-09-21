@@ -8,13 +8,15 @@ from app.schemas.facturacion import (
     FacturaRecRead, FacturaRecCreate, FacturaRecUpdate,
 )
 from app.services import facturas as svc
+from app.services.auth import get_current_user
 
 
 class RenumerarBody(BaseModel):
     empresa_id: int
     desde_id: Optional[int] = None
 
-router = APIRouter(prefix="/api/facturas", tags=["facturas"])
+router = APIRouter(prefix="/api/facturas", tags=["facturas"],
+                   dependencies=[Depends(get_current_user)])
 
 
 def _detalle_duplicado(fac, total_nuevo):

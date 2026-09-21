@@ -1,19 +1,21 @@
 import asyncio
 import datetime
 import os
+import secrets
 import signal
 import uuid as uuid_lib
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from app.db.database import crear_tablas, engine
-from app.api import empresas, clientes, proveedores, familias, articulos, albaranes, facturas, bancos, contabilidad, usuarios, extras, sync
+from app.db.database import crear_tablas, engine, SessionLocal
+from app.api import auth, empresas, clientes, proveedores, familias, articulos, albaranes, facturas, bancos, contabilidad, usuarios, extras, sync
 from app.api.dashboard import router as dashboard_router
 from app.api.estadisticas import router as estadisticas_router
 from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener_scheduler
 import app.models.usuarios  # registra tablas usuarios_nna y pagas_nna
 import app.models.sync  # registra tabla sync_log
+import app.models.usuarios_sistema  # registra tabla usuarios_sistema
 
-VERSION = "1.10.03"
+VERSION = "1.10.04"
 
 
 def _migraciones():
@@ -98,7 +100,36 @@ app.add_middleware(
 def startup():
     crear_tablas()
     _migraciones()
+    _crear_admin_por_defecto()
     iniciar_scheduler()
+
+
+def _crear_admin_por_defecto():
+    """Crea usuario admin por defecto si no existe ninguno en usuarios_sistema."""
+    from app.models.usuarios_sistema import UsuarioSistema
+    from app.services.auth import hash_password
+    db = SessionLocal()
+    try:
+        existe = db.query(UsuarioSistema).first()
+        if not existe:
+            password = secrets.token_urlsafe(8)
+            admin = UsuarioSistema(
+                username="admin",
+                hashed_password=hash_password(password),
+                activo=True,
+            )
+            db.add(admin)
+            db.commit()
+            print(f"\n{'='*60}")
+            print(f"  USUARIO ADMIN CREADO")
+            print(f"  Usuario: admin")
+            print(f"  Contraseña: {password}")
+            print(f"  GUARDA ESTA CONTRASEÑA - no se mostrará de nuevo")
+            print(f"{'='*60}\n")
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 
 @app.on_event("shutdown")
@@ -106,6 +137,7 @@ def shutdown():
     detener_scheduler()
 
 
+app.include_router(auth.router)
 app.include_router(empresas.router)
 app.include_router(clientes.router)
 app.include_router(proveedores.router)

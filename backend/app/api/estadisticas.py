@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.services import estadisticas as svc
 from app.api.contabilidad import _csv_response, _xlsx_response
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/estadisticas", tags=["estadisticas"])
+router = APIRouter(prefix="/api/estadisticas", tags=["estadisticas"],
+                   dependencies=[Depends(get_current_user)])
 
 
 @router.get("/anios")

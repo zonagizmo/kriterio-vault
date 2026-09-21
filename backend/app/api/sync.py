@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.models.sync import Instalacion
 from app.schemas.sync import SyncPushItem, SyncPushResponse, SyncPushResult
 from app.services.sync_replay import replay_operacion, ReplayError
+from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
@@ -52,9 +53,9 @@ def push(items: list[SyncPushItem], inst: Instalacion = Depends(verificar_instal
 
 
 @router.post("/ejecutar")
-def ejecutar(db: Session = Depends(get_db)):
-    """Disparo manual desde la propia instalación (sin autenticar: es local,
-    igual que el resto de la API hoy). Empuja el log pendiente al servidor
-    configurado en SYNC_SERVER_URL/SYNC_API_KEY, si lo hay."""
+def ejecutar(db: Session = Depends(get_db),
+             _user=Depends(get_current_user)):
+    """Disparo manual desde la propia instalación.
+    Requiere autenticación JWT."""
     from app.services.sync_push import sincronizar_con_servidor
     return sincronizar_con_servidor(db)

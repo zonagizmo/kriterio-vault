@@ -5,6 +5,48 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.10.04] — 2026-09-18 — Autenticación JWT + Login
+
+### Nuevo
+- **Sistema de autenticación completo con JWT**: todos los endpoints de la API (excepto login, version, root y sync push) requieren token de autenticación.
+- **Modelo `usuarios_sistema`**: tabla para usuarios de sistema (login), separada de los usuarios NNA.
+- **Endpoints de auth**:
+  - `POST /api/auth/login` — login con usuario/contraseña, devuelve access token (8h) + refresh token (30 días)
+  - `POST /api/auth/refresh` — renovar token
+  - `GET /api/auth/me` — info del usuario logueado
+  - `PUT /api/auth/cambiar-password` — cambio de contraseña
+- **Usuario admin por defecto**: al iniciar por primera vez se crea usuario `admin` con contraseña aleatoria impresa en consola.
+- **Página de login** en el frontend con formulario de usuario/contraseña.
+- **AuthContext** en React: gestiona token, usuario, login/logout y cambio de contraseña.
+- **Interceptor de axios**: inyecta `Authorization: Bearer <token>` automáticamente y redirige a `/login` en caso de 401.
+- **Guard de rutas**: sin token válido no se accede a ninguna página de la aplicación.
+- **Info de usuario en sidebar**: muestra el usuario logueado con botón "Salir".
+
+### Modificado
+- Todos los routers de la API (`empresas`, `clientes`, `proveedores`, `familias`, `articulos`, `albaranes`, `facturas`, `bancos`, `contabilidad`, `extras`, `usuarios`, `dashboard`, `estadisticas`, `ajustes`) ahora incluyen `dependencies=[Depends(get_current_user)]`.
+- `POST /api/sync/ejecutar` ahora requiere JWT (el endpoint `/api/sync/push` mantiene su auth por X-Sync-Key).
+- `api.js` (frontend): interceptor de request para inyectar token + interceptor de response para manejar 401.
+- `App.jsx`: envuelto en `AuthProvider`, ruta `/login`, `AuthGuard` en todas las rutas protegidas.
+- `Layout.jsx`: muestra usuario logueado y botón de cerrar sesión.
+
+### Base de datos
+- Nueva tabla `usuarios_sistema` (creada automáticamente por `crear_tablas()`).
+
+### Dependencias
+- Añadidos: `passlib[bcrypt]==1.7.4`, `python-jose[cryptography]==3.3.0`, `bcrypt==4.1.3`
+
+### Seguridad
+- Todos los endpoints protegidos por JWT (excepto los 4 indicados).
+- Contraseñas hasheadas con bcrypt.
+- Tokens con expiración configurable (8h access, 30 días refresh).
+- CORS sigue restringido a `localhost:5173`.
+
+### Compatibilidad
+- Requiere nuevo login. Los usuarios anteriores no tenían cuenta de sistema.
+- Primera vez: revisar la consola del backend para ver la contraseña de admin generada.
+
+---
+
 ## [1.10.03] — 2026-09-18 — Fix: race conditions en numeración secuencial
 
 ### Corregido

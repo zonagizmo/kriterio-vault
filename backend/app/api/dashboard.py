@@ -8,8 +8,10 @@ from app.models.facturacion import FacturaEmitida, FacturaRecibida
 from app.models.clientes_proveedores import Vencimiento
 from app.models.contabilidad import Extra, ExApunte
 from app.services import estadisticas as svc_estadisticas
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"],
+                   dependencies=[Depends(get_current_user)])
 
 _MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
              'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']

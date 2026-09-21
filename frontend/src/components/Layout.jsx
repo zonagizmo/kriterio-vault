@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
 import BotonApagar from './BotonApagar'
 import { VERSION_DISPLAY } from '../version'
 
@@ -21,11 +22,17 @@ const nav = [
 
 export default function Layout({ children }) {
   const { empresa, setEmpresa } = useEmpresa()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   function cambiarEmpresa() {
     setEmpresa(null)
     navigate('/')
+  }
+
+  function handleLogout() {
+    logout()
+    navigate('/login')
   }
 
   return (
@@ -85,6 +92,20 @@ export default function Layout({ children }) {
         </nav>
 
         <BotonApagar variant="sidebar" />
+
+        {/* Usuario logueado */}
+        <div className="px-3 py-2 border-t border-mgd-800">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-mgd-100 opacity-60 truncate">{user?.username}</span>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-mgd-100 opacity-50 hover:opacity-100 hover:text-white transition-opacity"
+              title="Cerrar sesión"
+            >
+              Salir
+            </button>
+          </div>
+        </div>
 
         <div className="px-4 py-2 text-xs text-mgd-100 opacity-30">
           v{VERSION_DISPLAY}

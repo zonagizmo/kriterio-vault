@@ -10,8 +10,10 @@ from app.schemas.bancos import (
     VencimientoRead, VencimientoCreate, VencimientoUpdate,
 )
 from app.services import bancos as svc
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/bancos", tags=["bancos"])
+router = APIRouter(prefix="/api/bancos", tags=["bancos"],
+                   dependencies=[Depends(get_current_user)])
 
 
 def _detalle_traspaso_sospechoso(db: Session, mov) -> dict:

@@ -7,11 +7,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/ajustes", tags=["ajustes"])
+router = APIRouter(prefix="/api/ajustes", tags=["ajustes"],
+                   dependencies=[Depends(get_current_user)])
 
 DB_PATH    = Path("./gestionmgd.db")
 BACKUP_DIR = Path("./backups")

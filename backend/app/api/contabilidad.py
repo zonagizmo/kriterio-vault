@@ -9,8 +9,10 @@ from app.schemas.contabilidad import (
     DiarioLineaRead, AsientoCreate, AsientoRead,
 )
 from app.services import contabilidad as svc
+from app.services.auth import get_current_user
 
-router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"])
+router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"],
+                   dependencies=[Depends(get_current_user)])
 
 
 # ─── Plan de cuentas ─────────────────────────────────────────────────────────
