@@ -5,6 +5,13 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.13] — 2026-09-24 — Fix ReferenceError al guardar movimiento bancario
+
+### Corregido
+- **`MovimientosBancoPage.jsx`** — `totalN` era una variable local a `guardar()` pero se referenciaba en `guardarConfirmado()`, causando `ReferenceError` que se traducía en "Error al guardar el movimiento". Ahora se pasa como parámetro.
+
+---
+
 ## [1.11.12] — 2026-09-24 — Fix NaN en saldos bancarios
 
 ### Corregido

@@ -326,15 +326,16 @@ export default function MovimientosBancoPage() {
         confirmText: 'Continuar',
         variant: 'warning',
         action: async () => {
-          await guardarConfirmado()
+          await guardarConfirmado(totalN)
         },
       })
       return
     }
-    await guardarConfirmado()
+    await guardarConfirmado(totalN)
   }
 
-  const guardarConfirmado = async () => {
+  const guardarConfirmado = async (totalNParam) => {
+    const totalN = totalNParam ?? (parseFloat(form.total) || 0)
     setGuardando(true)
     try {
       const pagosClean = pagos
