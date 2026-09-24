@@ -1,6 +1,7 @@
 from collections import defaultdict
 import time
 import logging
+from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, or_
 from app.models.contabilidad import Cuenta, Diario
@@ -56,7 +57,7 @@ def get_cuentas(db: Session, empresa_id: int, q: str = None, skip: int = 0, limi
     rows = db.execute(sql_items, params).fetchall()
     items = [
         {"id": r[0], "empresa_id": r[1], "cuenta": r[2], "texto": r[3],
-         "marca": r[4], "debe": float(r[5] or 0), "haber": float(r[6] or 0)}
+         "marca": r[4], "debe": r[5] or 0, "haber": r[6] or 0}
         for r in rows
     ]
     return items, total
@@ -350,13 +351,207 @@ def get_mayor(db: Session, empresa_id: int, cuenta: str,
     if skip > 0:
         ids_previos = query.order_by(Diario.fecha, Diario.asiento).limit(skip).with_entities(Diario.id)
         saldo_raw = db.query(func.sum(Diario.importe)).filter(Diario.id.in_(ids_previos)).scalar() or 0
-        saldo_anterior = round(float(saldo_raw), 2)
+        saldo_anterior = saldo_raw or 0
 
     items = query.order_by(Diario.fecha, Diario.asiento).offset(skip).limit(limit).all()
     return items, total, saldo_anterior
 
 
 # ─── Conciliación bancos vs contabilidad ─────────────────────────────────────
+
+def _calcular_saldos_banco(db: Session, empresa_id: int, banco) -> dict:
+    """Calcula saldo banco vs saldo libro mayor para un banco concreto."""
+    saldo_banco = (banco.saldoini or 0) + (banco.saldoact or 0)
+
+    saldo_lm_raw = db.query(func.sum(Diario.importe)).filter(
+        Diario.empresa_id == empresa_id,
+        Diario.cuenta == banco.cuenta,
+        or_(Diario.tpasiento != 'Z', Diario.tpasiento.is_(None)),
+    ).scalar() or 0
+    saldo_lm = saldo_lm_raw or 0
+
+    base_lm_raw = db.query(func.sum(Diario.importe)).filter(
+        Diario.empresa_id == empresa_id,
+        Diario.cuenta == banco.cuenta,
+        Diario.tipo != 'B',
+    ).scalar() or 0
+    base_lm = base_lm_raw or 0
+
+    diferencia = round(saldo_banco - saldo_lm, 2)
+    return {
+        'saldo_banco': saldo_banco,
+        'saldo_lm': saldo_lm,
+        'base_lm': base_lm,
+        'diferencia': diferencia,
+        'ok': abs(diferencia) < 0.01,
+    }
+
+
+def _emparejar_por_numero(movs, lm_por_numero):
+    """Paso 1: empareja movimientos bancarios con entradas LM por numero exacto."""
+    matched_mov_nums: set[int] = set()
+    matched_lm_ids: set[int] = set()
+    detalle = []
+
+    for mov in movs:
+        entries = lm_por_numero.get(mov.numero, [])
+        if entries:
+            total_b = mov.total or 0
+            total_lm = sum(l.importe or 0 for l in entries)
+            matched_mov_nums.add(mov.numero)
+            for l in entries:
+                matched_lm_ids.add(l.id)
+            dif = round(total_b - total_lm, 2)
+            if abs(dif) >= 0.01:
+                detalle.append({
+                    'tipo': 'importe_diff',
+                    'numero': mov.numero,
+                    'fecha': str(mov.fecha),
+                    'texto': mov.texto or '',
+                    'total_banco': total_b,
+                    'total_lm': total_lm,
+                    'diferencia': dif,
+                    'saldo_banco': mov.saldonue or 0,
+                })
+
+    return matched_mov_nums, matched_lm_ids, detalle
+
+
+def _emparejar_por_fecha_importe(movs, lm_entries_b, matched_lm_ids, matched_mov_nums):
+    """Paso 2: fallback por (fecha, importe) para movimientos sin emparejar por numero."""
+    lm_by_fi: dict = {}
+    for l in lm_entries_b:
+        if l.id not in matched_lm_ids:
+            key = (str(l.fecha), l.importe or 0)
+            lm_by_fi.setdefault(key, []).append(l)
+
+    sin_asiento_candidatos = []
+    for mov in movs:
+        if mov.numero in matched_mov_nums:
+            continue
+        total_b = mov.total or 0
+        key = (str(mov.fecha), total_b)
+        if key in lm_by_fi and lm_by_fi[key]:
+            matched_lm = lm_by_fi[key].pop(0)
+            matched_mov_nums.add(mov.numero)
+            matched_lm_ids.add(matched_lm.id)
+        else:
+            sin_asiento_candidatos.append(mov)
+
+    return sin_asiento_candidatos
+
+
+def _emparejar_transferencias(db, empresa_id, banco, sin_asiento_candidatos,
+                               matched_lm_ids, matched_mov_nums):
+    """Paso 3: resuelve transferencias receptor/emisor entre bancos."""
+    from app.models.bancos import Banco as BancoM, Pago as PagoM
+
+    all_pagos_banco = db.query(PagoM).filter(
+        PagoM.empresa_id == empresa_id,
+        PagoM.banco == banco.numero,
+    ).all()
+    pagos_x_numero: dict = {}
+    for p in all_pagos_banco:
+        pagos_x_numero.setdefault(p.numero, []).append(p)
+
+    detalle = []
+    for mov in sin_asiento_candidatos:
+        pags = pagos_x_numero.get(mov.numero, [])
+        receptor_pagos = [p for p in pags if p.dirsubcta == banco.cuenta and p.bancot and p.numerot]
+        matched = False
+
+        # Caso A: lado RECEPTOR
+        for p in receptor_pagos:
+            banco_t_obj = db.query(BancoM).filter(
+                BancoM.empresa_id == empresa_id,
+                BancoM.numero == p.bancot,
+            ).first()
+            if not banco_t_obj or not banco_t_obj.cuenta:
+                continue
+            entrada_origen = db.query(Diario).filter(
+                Diario.empresa_id == empresa_id,
+                Diario.tipo == 'B',
+                Diario.numero == p.numerot,
+                Diario.cuenta == banco_t_obj.cuenta,
+            ).first()
+            if not entrada_origen:
+                continue
+            entrada_receptor = db.query(Diario).filter(
+                Diario.empresa_id == empresa_id,
+                Diario.asiento == entrada_origen.asiento,
+                Diario.cuenta == banco.cuenta,
+            ).first()
+            if entrada_receptor and entrada_receptor.id not in matched_lm_ids:
+                matched_mov_nums.add(mov.numero)
+                matched_lm_ids.add(entrada_receptor.id)
+                matched = True
+                break
+
+        # Caso B: lado EMISOR
+        if not matched:
+            envio_pagos = [p for p in pags if p.bancot and p.numerot
+                           and p.dirsubcta and p.dirsubcta != banco.cuenta]
+            for p in envio_pagos:
+                banco_t_obj = db.query(BancoM).filter(
+                    BancoM.empresa_id == empresa_id,
+                    BancoM.numero == p.bancot,
+                ).first()
+                if not banco_t_obj or not banco_t_obj.cuenta:
+                    continue
+                entrada_otro = db.query(Diario).filter(
+                    Diario.empresa_id == empresa_id,
+                    Diario.tipo == 'B',
+                    Diario.numero == p.numerot,
+                    Diario.cuenta == banco_t_obj.cuenta,
+                ).first()
+                if not entrada_otro:
+                    continue
+                mi_linea = db.query(Diario).filter(
+                    Diario.empresa_id == empresa_id,
+                    Diario.asiento == entrada_otro.asiento,
+                    Diario.cuenta == banco.cuenta,
+                ).first()
+                if mi_linea and mi_linea.id not in matched_lm_ids:
+                    matched_mov_nums.add(mov.numero)
+                    matched_lm_ids.add(mi_linea.id)
+                    matched = True
+                    break
+
+        if not matched:
+            total_b = mov.total or 0
+            detalle.append({
+                'tipo': 'sin_asiento',
+                'numero': mov.numero,
+                'fecha': str(mov.fecha),
+                'texto': mov.texto or '',
+                'total_banco': total_b,
+                'total_lm': None,
+                'diferencia': total_b,
+                'saldo_banco': mov.saldonue or 0,
+                'es_transferencia': bool(receptor_pagos),
+            })
+
+    return detalle
+
+
+def _detectar_asientos_huerfanos(lm_entries_b, matched_lm_ids):
+    """Detecta asientos en LM sin ningún movimiento bancario equivalente."""
+    detalle = []
+    for l in lm_entries_b:
+        if l.id not in matched_lm_ids:
+            importe_l = l.importe or 0
+            detalle.append({
+                'tipo': 'asiento_huerfano',
+                'numero': l.numero,
+                'fecha': str(l.fecha),
+                'texto': 'Asiento sin movimiento bancario',
+                'total_banco': None,
+                'total_lm': importe_l,
+                'diferencia': -importe_l,
+                'saldo_banco': None,
+            })
+    return detalle
+
 
 def get_conciliacion_bancos(db: Session, empresa_id: int) -> list:
     from app.models.bancos import Banco, MovBanco
@@ -370,222 +565,54 @@ def get_conciliacion_bancos(db: Session, empresa_id: int) -> list:
     resultado = []
 
     for banco in bancos:
-        # Saldo banco: saldo inicial + movimientos acumulados (lo que ve el usuario en el módulo bancos)
-        saldo_banco = round(float(banco.saldoini or 0) + float(banco.saldoact or 0), 2)
+        saldos = _calcular_saldos_banco(db, empresa_id, banco)
 
-        # Saldo libro mayor: suma de TODOS los asientos de la cuenta (lo que muestra el libro mayor),
-        # excluyendo el asiento de cierre de ejercicio (tpasiento='Z'): el cierre vacía el mayor a 0
-        # para regularizar el ejercicio, pero el banco/caja sigue arrastrando el saldo real, así que
-        # comparar contra el mayor "cerrado" daría una diferencia permanente y correcta.
-        saldo_lm_raw = db.query(func.sum(Diario.importe)).filter(
+        if saldos['ok']:
+            resultado.append({
+                'banco': banco.numero,
+                'nombre': banco.nombre or '',
+                'cuenta': banco.cuenta,
+                **saldos,
+                'detalle': [],
+            })
+            continue
+
+        movs = db.query(MovBanco).filter(
+            MovBanco.empresa_id == empresa_id,
+            MovBanco.banco == banco.numero,
+        ).order_by(MovBanco.fecha, MovBanco.numero).all()
+
+        lm_entries_b = db.query(Diario).filter(
             Diario.empresa_id == empresa_id,
             Diario.cuenta == banco.cuenta,
-            or_(Diario.tpasiento != 'Z', Diario.tpasiento.is_(None)),
-        ).scalar() or 0
-        saldo_lm = round(float(saldo_lm_raw), 2)
+            Diario.tipo == 'B',
+        ).order_by(Diario.fecha, Diario.id).all()
 
-        # Entradas no-B en el LM (apertura, cierre, migradas sin tipo) — informativas para el detalle
-        base_lm_raw = db.query(func.sum(Diario.importe)).filter(
-            Diario.empresa_id == empresa_id,
-            Diario.cuenta == banco.cuenta,
-            Diario.tipo != 'B',
-        ).scalar() or 0
-        base_lm = round(float(base_lm_raw), 2)
+        my_tpasiento = f'B{banco.numero}'
+        lm_por_numero: dict[int, list] = {}
+        for l in lm_entries_b:
+            if l.numero is not None and (not l.tpasiento or l.tpasiento == my_tpasiento):
+                lm_por_numero.setdefault(l.numero, []).append(l)
 
-        diferencia = round(saldo_banco - saldo_lm, 2)
-        ok = abs(diferencia) < 0.01
+        matched_mov_nums, matched_lm_ids, detalle = _emparejar_por_numero(movs, lm_por_numero)
 
-        detalle = []
-        if not ok:
-            # Movimientos bancarios ordenados cronológicamente
-            movs = db.query(MovBanco).filter(
-                MovBanco.empresa_id == empresa_id,
-                MovBanco.banco == banco.numero,
-            ).order_by(MovBanco.fecha, MovBanco.numero).all()
+        sin_asiento_candidatos = _emparejar_por_fecha_importe(
+            movs, lm_entries_b, matched_lm_ids, matched_mov_nums)
 
-            # Entradas tipo B del diario para esta cuenta
-            lm_entries_b = db.query(Diario).filter(
-                Diario.empresa_id == empresa_id,
-                Diario.cuenta == banco.cuenta,
-                Diario.tipo == 'B',
-            ).order_by(Diario.fecha, Diario.id).all()
+        detalle.extend(_emparejar_transferencias(
+            db, empresa_id, banco, sin_asiento_candidatos,
+            matched_lm_ids, matched_mov_nums))
 
-            # Agrupar entradas LM por numero (para paso 1).
-            # Sólo usamos entradas generadas POR ESTE banco (tpasiento='B{banco.numero}')
-            # para evitar consumir líneas de asientos generados por el banco contraparte
-            # (mismo numero pero diferente banco, confunde el emparejamiento).
-            my_tpasiento = f'B{banco.numero}'
-            lm_por_numero: dict[int, list] = {}
-            for l in lm_entries_b:
-                if l.numero is not None and (not l.tpasiento or l.tpasiento == my_tpasiento):
-                    lm_por_numero.setdefault(l.numero, []).append(l)
+        detalle.extend(_detectar_asientos_huerfanos(lm_entries_b, matched_lm_ids))
 
-            matched_mov_nums: set[int] = set()
-            matched_lm_ids: set[int] = set()   # rastreo por id, no por numero
-
-            # Paso 1: emparejar por numero exacto
-            for mov in movs:
-                entries = lm_por_numero.get(mov.numero, [])
-                if entries:
-                    total_b  = round(float(mov.total or 0), 2)
-                    total_lm = round(sum(float(l.importe or 0) for l in entries), 2)
-                    matched_mov_nums.add(mov.numero)
-                    for l in entries:
-                        matched_lm_ids.add(l.id)
-                    dif = round(total_b - total_lm, 2)
-                    if abs(dif) >= 0.01:
-                        detalle.append({
-                            'tipo': 'importe_diff',
-                            'numero': mov.numero,
-                            'fecha': str(mov.fecha),
-                            'texto': mov.texto or '',
-                            'total_banco': total_b,
-                            'total_lm': total_lm,
-                            'diferencia': dif,
-                            'saldo_banco': round(float(mov.saldonue or 0), 2),
-                        })
-
-            # Paso 2: fallback por (fecha, importe) para movimientos sin emparejar por numero
-            # Cubre desfases de numeración habituales en datos migrados
-            lm_by_fi: dict = {}
-            for l in lm_entries_b:
-                if l.id not in matched_lm_ids:
-                    key = (str(l.fecha), round(float(l.importe or 0), 2))
-                    lm_by_fi.setdefault(key, []).append(l)
-
-            sin_asiento_candidatos = []
-            for mov in movs:
-                if mov.numero in matched_mov_nums:
-                    continue
-                total_b = round(float(mov.total or 0), 2)
-                key = (str(mov.fecha), total_b)
-                if key in lm_by_fi and lm_by_fi[key]:
-                    matched_lm = lm_by_fi[key].pop(0)
-                    matched_mov_nums.add(mov.numero)
-                    matched_lm_ids.add(matched_lm.id)
-                else:
-                    sin_asiento_candidatos.append(mov)
-
-            # Paso 3: movimientos que son el lado RECEPTOR de una transferencia entre bancos.
-            # Su asiento existe pero está numerado con el número del movimiento del banco ORIGEN,
-            # así que paso 1 y 2 no lo emparejaron. Buscamos la línea del LM generada por el
-            # banco de origen que corresponde a este banco (existe en el mismo asiento).
-            from app.models.bancos import Banco as BancoM, Pago as PagoM
-            all_pagos_banco = db.query(PagoM).filter(
-                PagoM.empresa_id == empresa_id,
-                PagoM.banco == banco.numero,
-            ).all()
-            pagos_x_numero: dict = {}
-            for p in all_pagos_banco:
-                pagos_x_numero.setdefault(p.numero, []).append(p)
-
-            for mov in sin_asiento_candidatos:
-                pags = pagos_x_numero.get(mov.numero, [])
-                # Es receptor si algún pago tiene dirsubcta == cuenta de ESTE banco
-                receptor_pagos = [p for p in pags if p.dirsubcta == banco.cuenta and p.bancot and p.numerot]
-                matched = False
-
-                # Caso A: lado RECEPTOR — el otro banco generó el asiento con su numero
-                # (p.dirsubcta == banco.cuenta → este banco es el destinatario)
-                for p in receptor_pagos:
-                    banco_t_obj = db.query(BancoM).filter(
-                        BancoM.empresa_id == empresa_id,
-                        BancoM.numero == p.bancot,
-                    ).first()
-                    if not banco_t_obj or not banco_t_obj.cuenta:
-                        continue
-                    entrada_origen = db.query(Diario).filter(
-                        Diario.empresa_id == empresa_id,
-                        Diario.tipo == 'B',
-                        Diario.numero == p.numerot,
-                        Diario.cuenta == banco_t_obj.cuenta,
-                    ).first()
-                    if not entrada_origen:
-                        continue
-                    entrada_receptor = db.query(Diario).filter(
-                        Diario.empresa_id == empresa_id,
-                        Diario.asiento == entrada_origen.asiento,
-                        Diario.cuenta == banco.cuenta,
-                    ).first()
-                    if entrada_receptor and entrada_receptor.id not in matched_lm_ids:
-                        matched_mov_nums.add(mov.numero)
-                        matched_lm_ids.add(entrada_receptor.id)
-                        matched = True
-                        break
-
-                # Caso B: lado EMISOR — el banco receptor generó el asiento con su numero
-                # (p.dirsubcta != None, indica la cuenta destino)
-                if not matched:
-                    envio_pagos = [p for p in pags if p.bancot and p.numerot
-                                   and p.dirsubcta and p.dirsubcta != banco.cuenta]
-                    for p in envio_pagos:
-                        banco_t_obj = db.query(BancoM).filter(
-                            BancoM.empresa_id == empresa_id,
-                            BancoM.numero == p.bancot,
-                        ).first()
-                        if not banco_t_obj or not banco_t_obj.cuenta:
-                            continue
-                        # Asiento generado por el banco receptor con su numero de movimiento
-                        entrada_otro = db.query(Diario).filter(
-                            Diario.empresa_id == empresa_id,
-                            Diario.tipo == 'B',
-                            Diario.numero == p.numerot,
-                            Diario.cuenta == banco_t_obj.cuenta,
-                        ).first()
-                        if not entrada_otro:
-                            continue
-                        mi_linea = db.query(Diario).filter(
-                            Diario.empresa_id == empresa_id,
-                            Diario.asiento == entrada_otro.asiento,
-                            Diario.cuenta == banco.cuenta,
-                        ).first()
-                        if mi_linea and mi_linea.id not in matched_lm_ids:
-                            matched_mov_nums.add(mov.numero)
-                            matched_lm_ids.add(mi_linea.id)
-                            matched = True
-                            break
-
-                if not matched:
-                    total_b = round(float(mov.total or 0), 2)
-                    detalle.append({
-                        'tipo': 'sin_asiento',
-                        'numero': mov.numero,
-                        'fecha': str(mov.fecha),
-                        'texto': mov.texto or '',
-                        'total_banco': total_b,
-                        'total_lm': None,
-                        'diferencia': total_b,
-                        'saldo_banco': round(float(mov.saldonue or 0), 2),
-                        'es_transferencia': bool(receptor_pagos),
-                    })
-
-            # Asientos en LM sin ningún movimiento bancario equivalente (por id)
-            for l in lm_entries_b:
-                if l.id not in matched_lm_ids:
-                    importe_l = round(float(l.importe or 0), 2)
-                    detalle.append({
-                        'tipo': 'asiento_huerfano',
-                        'numero': l.numero,
-                        'fecha': str(l.fecha),
-                        'texto': 'Asiento sin movimiento bancario',
-                        'total_banco': None,
-                        'total_lm': importe_l,
-                        'diferencia': -importe_l,
-                        'saldo_banco': None,
-                    })
-
-            detalle.sort(key=lambda x: (x['fecha'] or '9999', x['numero']))
+        detalle.sort(key=lambda x: (x['fecha'] or '9999', x['numero']))
 
         resultado.append({
-            'banco':      banco.numero,
-            'nombre':     banco.nombre or '',
-            'cuenta':     banco.cuenta,
-            'saldo_banco': saldo_banco,
-            'saldo_lm':   saldo_lm,
-            'base_lm':    base_lm,
-            'diferencia': diferencia,
-            'ok':         ok,
-            'detalle':    detalle,
+            'banco': banco.numero,
+            'nombre': banco.nombre or '',
+            'cuenta': banco.cuenta,
+            **saldos,
+            'detalle': detalle,
         })
 
     return resultado
@@ -613,10 +640,10 @@ def get_sumas_saldos(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta
             ~Diario.tpasiento.in_(excluir_tipos),
         ))
 
-    agg = defaultdict(lambda: {'debe': 0.0, 'haber': 0.0})
+    agg = defaultdict(lambda: {'debe': Decimal('0'), 'haber': Decimal('0')})
     for cuenta_code, importe in query.all():
         key = cuenta_code[:nivel] if nivel and len(cuenta_code) > nivel else cuenta_code
-        imp = float(importe or 0)
+        imp = importe or 0
         if imp > 0:
             agg[key]['debe'] += imp
         else:
@@ -625,10 +652,10 @@ def get_sumas_saldos(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta
     cuentas_map = {c.cuenta: c.texto for c in db.query(Cuenta).filter(Cuenta.empresa_id == empresa_id).all()}
 
     result = []
-    tot_debe = tot_haber = tot_sd = tot_sa = 0.0
+    tot_debe = tot_haber = tot_sd = tot_sa = Decimal('0')
     for cc in sorted(agg.keys()):
-        debe = round(agg[cc]['debe'], 2)
-        haber = round(agg[cc]['haber'], 2)
+        debe = round(float(agg[cc]['debe']), 2)
+        haber = round(float(agg[cc]['haber']), 2)
         saldo = round(debe - haber, 2)
         sd = round(saldo, 2) if saldo > 0 else 0.0
         sa = round(-saldo, 2) if saldo < 0 else 0.0
@@ -642,7 +669,7 @@ def get_sumas_saldos(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta
             'saldo_acreedor': sa,
         })
 
-    return result, round(tot_debe, 2), round(tot_haber, 2), round(tot_sd, 2), round(tot_sa, 2)
+    return result, round(float(tot_debe), 2), round(float(tot_haber), 2), round(float(tot_sd), 2), round(float(tot_sa), 2)
 
 
 # ─── Pérdidas y ganancias ────────────────────────────────────────────────────
@@ -679,7 +706,7 @@ def get_pyg(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta=None) ->
     if fecha_hasta:
         q_saldo += " AND fecha <= :fh"
         params["fh"] = fecha_hasta
-    saldo_inicial = round(float(db.execute(_text(q_saldo), params).scalar() or 0), 2)
+    saldo_inicial = db.execute(_text(q_saldo), params).scalar() or 0
 
     return {
         'gastos': gastos,
@@ -726,7 +753,7 @@ def _ya_tiene_asiento_banco(db: Session, empresa_id: int, banco_cuenta: str, num
             Diario.tipo == 'B',
             Diario.numero == None,
             Diario.fecha == fecha,
-            Diario.importe == round(float(importe), 2),
+            Diario.importe == importe,
         ).all()
     if not entries:
         return False
@@ -749,7 +776,7 @@ def _crear_lineas_raw(db: Session, empresa_id: int, asiento_num: int,
     for ld in lineas_data:
         if not ld.get('cuenta'):
             continue
-        imp = round(float(ld['importe']), 2)
+        imp = ld['importe']
         # Raw SQL insert — evita el FK sort error de SQLAlchemy con diario.empresa_id → empresas
         db.execute(_text(
             "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, clave_ori, tipo, numero, cuenta, importe, multi, saldo)"
@@ -795,21 +822,19 @@ def _eliminar_asiento_documento(db: Session, empresa_id: int, tipo: str, numero:
         db.delete(l)
 
 
-def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> dict | None:
-    """Genera el asiento contable para un movimiento bancario (no contraparte)."""
+def _debe_generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> bool:
+    """Verifica si un movimiento bancario debe generar asiento contable.
+    Retorna False si debe saltarse (contraparte, duplicado, transferencia simétrica)."""
     from app.models.bancos import Banco as BancoModel, MovBanco as MovBancoModel, Pago as PagoModel
+
     if not banco or not banco.cuenta:
-        return None
+        return False
+
     # Contraparte primaria: algún pago tiene dirsubcta == cuenta propia del banco
-    # (es el lado receptor de una transferencia — el asiento lo genera el banco origen)
     if pagos and any(p.dirsubcta == banco.cuenta for p in pagos):
-        return None
-    # Receptor sin pago propio de transferencia: otro banco tiene un pago con
-    # bancot/numerot apuntando a ESTE movimiento. El asiento lo genera (o generó)
-    # el banco origen; generarlo aquí también duplicaría el apunte en el Mayor
-    # (causa histórica de los asientos dobles). No aplica si este movimiento es a su
-    # vez origen (sus propios pagos tienen bancot): en ese caso el pago entrante es
-    # solo el espejo del destino apuntando de vuelta.
+        return False
+
+    # Receptor sin pago propio de transferencia
     es_origen = pagos and any(p.bancot for p in pagos)
     if not es_origen:
         pago_entrante = db.query(PagoModel).filter(
@@ -819,20 +844,14 @@ def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> di
             PagoModel.banco != banco.numero,
         ).first()
         if pago_entrante:
-            return None
-    # Transferencia sin dirsubcta: los pagos de ambos lados son simétricos
-    # (bancot+numerot apuntándose mutuamente), así que el asiento lo genera solo el
-    # lado PAGADOR (total negativo); el lado receptor difiere porque el asiento del
-    # emisor ya incluye ambas cuentas. (Antes este chequeo bloqueaba a los dos lados
-    # y las transferencias sin dirsubcta quedaban sin asiento.)
+            return False
+
+    # Transferencia sin dirsubcta: solo el lado PAGADOR (total negativo) genera asiento
     if pagos and any(p.bancot and p.numerot and not p.dirsubcta for p in pagos):
-        if float(mov.total or 0) >= 0:
-            return None
-    # Contraparte por bancot+numerot: verificar si el banco ORIGEN ya generó el asiento.
-    # Comprobamos que exista una línea con cuenta=banco_t.cuenta (cuenta del OTRO banco),
-    # NO banco.cuenta: los números de movimiento no son únicos entre bancos y usar
-    # banco.cuenta provoca falsos positivos cuando otro movimiento del banco actual
-    # tiene el mismo número que p.numerot.
+        if mov.total or 0 >= 0:
+            return False
+
+    # Verificar si el banco ORIGEN ya generó el asiento por contraparte
     for p in pagos:
         if p.bancot and p.numerot:
             banco_t = db.query(BancoModel).filter(
@@ -840,14 +859,6 @@ def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> di
                 BancoModel.numero == p.bancot,
             ).first()
             if banco_t and banco_t.cuenta:
-                # Buscar si el banco contraparte ya generó el asiento por numero exacto.
-                # Aceptamos cualquier candidato salvo que esté etiquetado como
-                # transferencia propia de OTRO banco distinto (tpasiento='B{N}' con
-                # N != bancot): eso es lo único que da falsos positivos por colisión
-                # de numero entre bancos. Los asientos migrados (tpasiento='M', NULL,
-                # etc.) sí deben contar como "ya existe" — filtrar por tpasiento
-                # exacto los deja fuera y genera duplicados (regresión real: 468
-                # asientos duplicados en empresa 1, corregidos manualmente).
                 def _es_transferencia_de_otro_banco(tp):
                     return bool(tp) and tp.startswith('B') and tp[1:].isdigit() and tp != f'B{p.bancot}'
 
@@ -861,12 +872,6 @@ def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> di
                     (c for c in candidatos_origen if not _es_transferencia_de_otro_banco(c.tpasiento)),
                     None,
                 )
-                # Fallback: asientos migrados no siempre usan el numero "correcto"
-                # (p.numerot) — algunos quedaron etiquetados con el numero del OTRO
-                # lado de la transferencia. Buscar por fecha+importe+cuenta, sin
-                # restringir el numero, cubre ese caso (antes solo se aceptaba
-                # numero=NULL, lo que dejaba pasar duplicados con numero real pero
-                # "cruzado" — regresión real detectada en empresa 1, asiento 2852).
                 if not entrada_origen:
                     mov_t = db.query(MovBancoModel).filter(
                         MovBancoModel.empresa_id == empresa_id,
@@ -879,92 +884,103 @@ def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> di
                             Diario.tipo == 'B',
                             Diario.cuenta == banco_t.cuenta,
                             Diario.fecha == mov_t.fecha,
-                            Diario.importe == round(float(mov_t.total or 0), 2),
+                            Diario.importe == (mov_t.total or 0),
                         ).all()
                         entrada_origen = next(
                             (c for c in candidatos_fecha if not _es_transferencia_de_otro_banco(c.tpasiento)),
                             None,
                         )
                 if entrada_origen:
-                    # Confirmar que ese asiento incluye también ESTE banco
                     if db.query(Diario).filter(
                         Diario.empresa_id == empresa_id,
                         Diario.asiento == entrada_origen.asiento,
                         Diario.cuenta == banco.cuenta,
                     ).first():
-                        return None
+                        return False
 
     if _ya_tiene_asiento_banco(db, empresa_id, banco.cuenta, mov.numero, banco.numero,
-                              fecha=mov.fecha, importe=float(mov.total or 0)):
-        return None
+                              fecha=mov.fecha, importe=mov.total or 0):
+        return False
 
-    lineas_data = [{'cuenta': banco.cuenta, 'importe': float(mov.total or 0)}]
+    return True
+
+
+def _resolver_cuenta_pago(db: Session, empresa_id: int, p, banco) -> str | None:
+    """Resuelve la cuenta contable de un pago con fallbacks:
+    dirsubcta → bancot → vto.cuentadef → factura/extra → proveedor."""
+    from app.models.bancos import Banco as BancoModel
+
+    subcta = p.dirsubcta
+
+    # Fallback 1: banco contraparte (transferencia interna)
+    if not subcta and p.bancot:
+        banco_t = db.query(BancoModel).filter(
+            BancoModel.empresa_id == empresa_id,
+            BancoModel.numero == p.bancot,
+        ).first()
+        if banco_t:
+            subcta = banco_t.cuenta
+
+    # Fallback 2: vencimiento → factura/extra → proveedor
+    if not subcta and p.vto:
+        from app.models.clientes_proveedores import Vencimiento, Proveedor
+        from app.models.facturacion import FacturaRecibida
+        vto = db.query(Vencimiento).filter(
+            Vencimiento.empresa_id == empresa_id,
+            Vencimiento.numero == p.vto,
+        ).first()
+        if vto:
+            subcta = vto.cuentadef
+            if not subcta and vto.tpnumero and vto.tipo == 'R':
+                fac = db.query(FacturaRecibida).filter(
+                    FacturaRecibida.empresa_id == empresa_id,
+                    FacturaRecibida.numero == vto.tpnumero,
+                ).first()
+                if fac:
+                    subcta = fac.prcuenta
+                    if not subcta and fac.proveedor:
+                        prov = db.query(Proveedor).filter(
+                            Proveedor.empresa_id == empresa_id,
+                            Proveedor.numero == fac.proveedor,
+                        ).first()
+                        if prov:
+                            subcta = prov.cuenta
+            if not subcta and vto.tpnumero and vto.tipo == 'X':
+                from app.models.contabilidad import Extra, ExApunte
+                extra = db.query(Extra).filter(
+                    Extra.empresa_id == empresa_id,
+                    Extra.numero == vto.tpnumero,
+                ).first()
+                if extra:
+                    apuntes = db.query(ExApunte).filter(
+                        ExApunte.empresa_id == empresa_id,
+                        ExApunte.extra == extra.numero,
+                    ).all()
+                    h_ap = next((a for a in apuntes if a.dh == 'H' and a.cuenta), None)
+                    d_ap = next((a for a in apuntes if a.dh == 'D' and a.cuenta), None)
+                    ap = h_ap or d_ap
+                    if ap:
+                        subcta = ap.cuenta
+
+    return subcta
+
+
+def _construir_lineas_asiento(db: Session, empresa_id: int, mov, banco, pagos) -> list | None:
+    """Construye la lista de lineas_data para el asiento. Retorna None si no hay contrapartida."""
+    lineas_data = [{'cuenta': banco.cuenta, 'importe': mov.total or 0}]
     for p in pagos:
-        subcta = p.dirsubcta
-        # Fallback 1: resolver cuenta a partir del banco contraparte (transferencia interna)
-        if not subcta and p.bancot:
-            banco_t = db.query(BancoModel).filter(
-                BancoModel.empresa_id == empresa_id,
-                BancoModel.numero == p.bancot,
-            ).first()
-            if banco_t:
-                subcta = banco_t.cuenta
-        # Fallback 2: resolver cuenta a partir del vencimiento → factura/extra → proveedor
-        if not subcta and p.vto:
-            from app.models.clientes_proveedores import Vencimiento, Proveedor
-            from app.models.facturacion import FacturaRecibida
-            vto = db.query(Vencimiento).filter(
-                Vencimiento.empresa_id == empresa_id,
-                Vencimiento.numero == p.vto,
-            ).first()
-            if vto:
-                subcta = vto.cuentadef
-                if not subcta and vto.tpnumero and vto.tipo == 'R':
-                    fac = db.query(FacturaRecibida).filter(
-                        FacturaRecibida.empresa_id == empresa_id,
-                        FacturaRecibida.numero == vto.tpnumero,
-                    ).first()
-                    if fac:
-                        subcta = fac.prcuenta
-                        if not subcta and fac.proveedor:
-                            prov = db.query(Proveedor).filter(
-                                Proveedor.empresa_id == empresa_id,
-                                Proveedor.numero == fac.proveedor,
-                            ).first()
-                            if prov:
-                                subcta = prov.cuenta
-                if not subcta and vto.tpnumero and vto.tipo == 'X':
-                    # Extra: usar cuenta H (proveedor/acreedor) si existe, si no la cuenta D (gasto)
-                    from app.models.contabilidad import Extra, ExApunte
-                    extra = db.query(Extra).filter(
-                        Extra.empresa_id == empresa_id,
-                        Extra.numero == vto.tpnumero,
-                    ).first()
-                    if extra:
-                        apuntes = db.query(ExApunte).filter(
-                            ExApunte.empresa_id == empresa_id,
-                            ExApunte.extra == extra.numero,
-                        ).all()
-                        h_ap = next((a for a in apuntes if a.dh == 'H' and a.cuenta), None)
-                        d_ap = next((a for a in apuntes if a.dh == 'D' and a.cuenta), None)
-                        ap = h_ap or d_ap
-                        if ap:
-                            subcta = ap.cuenta
+        subcta = _resolver_cuenta_pago(db, empresa_id, p, banco)
         if subcta:
-            lineas_data.append({'cuenta': subcta, 'importe': -round(float(p.importe or 0), 2)})
+            lineas_data.append({'cuenta': subcta, 'importe': -(p.importe or 0)})
 
-    # Sin contrapartida no generamos asiento
     if len(lineas_data) < 2:
         return None
+    return lineas_data
 
-    # Red de seguridad final: cubre asientos migrados cuyo numero de movimiento no es
-    # fiable (o falta) y que por eso no los detecta _ya_tiene_asiento_banco. Solo mira
-    # entradas con numero=NULL: si tuviera en cuenta también asientos con numero real,
-    # dos movimientos DISTINTOS que coincidan en fecha+importe (nada raro con importes
-    # fijos recurrentes, p. ej. varias transferencias de 400€ el mismo día) se
-    # confundirían entre sí y el segundo se quedaría sin asiento silenciosamente
-    # (caso real: empresa 2, banco CAJA, varias transferencias semanales a CAJA
-    # COORDINACION por el mismo importe el mismo día).
+
+def _detectar_asiento_migrado(db: Session, empresa_id: int, mov, lineas_data) -> bool:
+    """Red de seguridad: detecta asientos migrados duplicados por fecha+importe sin numero fiable.
+    Retorna True si ya existe un asiento candidato (no generar)."""
     asientos_candidatos = None
     for ld in lineas_data:
         ids_cuenta = {
@@ -974,13 +990,25 @@ def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> di
                 Diario.numero.is_(None),
                 Diario.fecha == mov.fecha,
                 Diario.cuenta == ld['cuenta'],
-                Diario.importe == round(float(ld['importe']), 2),
+                Diario.importe == ld['importe'],
             ).all()
         }
         asientos_candidatos = ids_cuenta if asientos_candidatos is None else (asientos_candidatos & ids_cuenta)
         if not asientos_candidatos:
             break
-    if asientos_candidatos:
+    return bool(asientos_candidatos)
+
+
+def generar_asiento_banco(db: Session, empresa_id: int, mov, banco, pagos) -> dict | None:
+    """Genera el asiento contable para un movimiento bancario (no contraparte)."""
+    if not _debe_generar_asiento_banco(db, empresa_id, mov, banco, pagos):
+        return None
+
+    lineas_data = _construir_lineas_asiento(db, empresa_id, mov, banco, pagos)
+    if not lineas_data:
+        return None
+
+    if _detectar_asiento_migrado(db, empresa_id, mov, lineas_data):
         return None
 
     num = _siguiente_asiento(db, empresa_id)
@@ -1036,7 +1064,7 @@ def _eliminar_asiento_banco(db: Session, empresa_id: int, banco_cuenta: str, num
     ids_to_delete = [l.id for l in lines_to_delete]
     for l in lines_to_delete:
         if l.cuenta:
-            imp = float(l.importe or 0)
+            imp = l.importe or 0
             if imp > 0:
                 db.execute(_text("UPDATE cuentas SET debe=ROUND(debe-:v,2) WHERE empresa_id=:e AND cuenta=:c"),
                            {"v": imp, "e": empresa_id, "c": l.cuenta})
@@ -1068,11 +1096,11 @@ def generar_asiento_factura_rec(db: Session, empresa_id: int, fac, apuntes) -> d
     if _ya_tiene_asiento(db, empresa_id, 'R', fac.numero):
         return None
 
-    lineas_data = [{'cuenta': fac.prcuenta, 'importe': -round(float(fac.total or 0), 2)}]
+    lineas_data = [{'cuenta': fac.prcuenta, 'importe': -(fac.total or 0)}]
     for ap in apuntes:
         # Fallback a cuenta de gasto genérica si el apunte no tiene cuenta asignada
         cuenta_ap = ap.cuenta or CUENTA_GASTO_DEFAULT
-        lineas_data.append({'cuenta': cuenta_ap, 'importe': round(float(ap.importe or 0), 2)})
+        lineas_data.append({'cuenta': cuenta_ap, 'importe': ap.importe or 0})
 
     if len(lineas_data) < 2:
         return None
@@ -1103,8 +1131,8 @@ def generar_asiento_extra(db: Session, empresa_id: int, extra) -> dict | None:
         return None
     clave = d_aps[0].cuenta
     lineas_data = (
-        [{'cuenta': ap.cuenta, 'importe': round(float(ap.importe or 0), 2)} for ap in d_aps] +
-        [{'cuenta': ap.cuenta, 'importe': -round(float(ap.importe or 0), 2)} for ap in h_aps]
+        [{'cuenta': ap.cuenta, 'importe': ap.importe or 0} for ap in d_aps] +
+        [{'cuenta': ap.cuenta, 'importe': -(ap.importe or 0)} for ap in h_aps]
     )
     num = _siguiente_asiento(db, empresa_id)
     lineas = _crear_lineas_raw(
@@ -1140,10 +1168,10 @@ def generar_asiento_factura_emi(db: Session, empresa_id: int, fac, apuntes) -> d
     if _ya_tiene_asiento(db, empresa_id, 'F', fac.numero):
         return None
 
-    lineas_data = [{'cuenta': fac.clcuenta, 'importe': round(float(fac.total or 0), 2)}]
+    lineas_data = [{'cuenta': fac.clcuenta, 'importe': fac.total or 0}]
     for ap in apuntes:
         if ap.cuenta:
-            lineas_data.append({'cuenta': ap.cuenta, 'importe': -round(float(ap.importe or 0), 2)})
+            lineas_data.append({'cuenta': ap.cuenta, 'importe': -(ap.importe or 0)})
 
     if len(lineas_data) < 2:
         return None
@@ -1354,7 +1382,7 @@ def get_diagnostico(db: Session, empresa_id: int) -> dict:
                             Diario.tipo == 'B',
                             Diario.cuenta == banco_t.cuenta,
                             Diario.fecha == mov_t.fecha,
-                            Diario.importe == round(float(mov_t.total or 0), 2),
+                            Diario.importe == (mov_t.total or 0),
                         ).first()
                 if entrada_origen and db.query(Diario).filter(
                     Diario.empresa_id == empresa_id,
@@ -1388,7 +1416,7 @@ def get_diagnostico(db: Session, empresa_id: int) -> dict:
             'numero': mov.numero,
             'fecha': str(mov.fecha) if mov.fecha else None,
             'texto': mov.texto or '',
-            'total': float(mov.total or 0),
+            'total': mov.total or 0,
         })
         if len(movs_sin_asiento) >= 50:
             break
@@ -1404,7 +1432,7 @@ def get_diagnostico(db: Session, empresa_id: int) -> dict:
         CuentaM.cuenta.like('4%'),
         ~CuentaM.cuenta.like('43%'),
     ).all():
-        saldo = round(float(cta.debe or 0) - float(cta.haber or 0), 2)
+        saldo = (cta.debe or 0) - (cta.haber or 0)
         if saldo > 0.01:
             cuentas_desequilibradas.append({
                 'cuenta': cta.cuenta,

@@ -5,6 +5,15 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.18] — 2026-09-24 — Fix Sumas y Saldos: TypeError + Decimal/string
+
+### Corregido
+- **`contabilidad.py`** — `get_sumas_saldos` usaba totales `float(0.0)` con valores `Decimal` → TypeError 500. Ahora los totales son `Decimal` y los valores se convierten a `float` antes de devolver.
+- **`contabilidad/utils.js`** — `EUR()` local sin `Number()` → no formateaba valores Decimal/string. Añadido `Number()`.
+- **`TabSumasSaldos.jsx`** — Añadido `catch` con mensaje de error al usuario (antes fallaba silenciosamente).
+
+---
+
 ## [1.11.17] — 2026-09-24 — Fix Libro Mayor: saldo y totales Decimal/string
 
 ### Corregido
