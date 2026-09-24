@@ -5,6 +5,13 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.19] — 2026-09-24 — Fix Sumas y Saldos: Decimal ≠ float accumulator
+
+### Corregido
+- **`contabilidad.py`** — Los acumuladores seguían siendo `Decimal` mientras `debe`/`haber` ya eran `float`. Unificados todos los totales a `float` para evitar `TypeError: Decimal += float`.
+
+---
+
 ## [1.11.18] — 2026-09-24 — Fix Sumas y Saldos: TypeError + Decimal/string
 
 ### Corregido

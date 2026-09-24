@@ -652,7 +652,7 @@ def get_sumas_saldos(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta
     cuentas_map = {c.cuenta: c.texto for c in db.query(Cuenta).filter(Cuenta.empresa_id == empresa_id).all()}
 
     result = []
-    tot_debe = tot_haber = tot_sd = tot_sa = Decimal('0')
+    tot_debe = tot_haber = tot_sd = tot_sa = 0.0
     for cc in sorted(agg.keys()):
         debe = round(float(agg[cc]['debe']), 2)
         haber = round(float(agg[cc]['haber']), 2)
@@ -669,7 +669,7 @@ def get_sumas_saldos(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta
             'saldo_acreedor': sa,
         })
 
-    return result, round(float(tot_debe), 2), round(float(tot_haber), 2), round(float(tot_sd), 2), round(float(tot_sa), 2)
+    return result, round(tot_debe, 2), round(tot_haber, 2), round(tot_sd, 2), round(tot_sa, 2)
 
 
 # ─── Pérdidas y ganancias ────────────────────────────────────────────────────
