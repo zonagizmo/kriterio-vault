@@ -40,7 +40,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 | 16 | **~~`confirm()` nativo~~** | ~~Múltiples páginas usan `window.confirm()` en vez de un modal custom.~~ **Corregido en v1.11.09**: 25 llamadas a `confirm()` reemplazadas por `ConfirmModal` (componente reutilizable con 3 variantes: danger/warning/info). 13 archivos modificados. |
 | 17 | **~~Sin rate limiting~~** | ~~`/api/sync/push` no limita requests. Vulnerable a DoS.~~ **Corregido en v1.11.10**: `slowapi` integrado. Login: 10/min por IP. Sync push: 60/min por API key. Global: 200/min por IP. Tests incluidos. |
 | 18 | **~~`@app.on_event` deprecated~~** | ~~FastAPI deprecó estos eventos. Usar `lifespan`.~~ **Corregido en v1.11.11**: migrado a `@asynccontextmanager` con `lifespan`. Eliminados 4 DeprecationWarning. |
-| 19 | **Caddy básico** | Falta `X-Content-Type-Options`, `X-Frame-Options`, `HSTS`. |
+| 19 | **~~Caddy básico~~** | ~~Falta `X-Content-Type-Options`, `X-Frame-Options`, `HSTS`.~~ **Corregido en v1.11.20**: Headers de seguridad añadidos al Caddyfile: HSTS (1 año + preload), X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Cache-Control no-store, eliminación de Server header. |
 
 ---
 

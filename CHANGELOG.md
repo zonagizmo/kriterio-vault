@@ -5,6 +5,20 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.20] — 2026-09-24 — Punto 19: Headers de seguridad en Caddy
+
+### Añadido
+- **`deploy/Caddyfile`** — Headers de seguridad HTTP:
+  - `X-Content-Type-Options: nosniff` — Prevención MIME sniffing
+  - `X-Frame-Options: DENY` — Sin iframes
+  - `X-XSS-Protection: 1; mode=block` — XSS filter del navegador
+  - `Referrer-Policy: strict-origin-when-cross-origin` — Control de referrer
+  - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` — HSTS 1 año
+  - `Cache-Control: no-store, no-cache, must-revalidate` — Sin caché datos sensibles
+  - `-Server` — Ocultar versión del servidor
+
+---
+
 ## [1.11.19] — 2026-09-24 — Fix Sumas y Saldos: Decimal ≠ float accumulator
 
 ### Corregido
