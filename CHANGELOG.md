@@ -5,6 +5,13 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.14] — 2026-09-24 — Fix suma vencimientos en VtosSelector
+
+### Corregido
+- **`VtosSelector.jsx`** — `EUR` local sin `Number()` + `totalSeleccionado` concatenaba strings Decimal en vez de sumarlos. Importado `EUR` de `utils/format` y añadido `Number()` en la suma.
+
+---
+
 ## [1.11.13] — 2026-09-24 — Fix ReferenceError al guardar movimiento bancario
 
 ### Corregido

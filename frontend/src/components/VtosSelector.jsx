@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import Modal from './Modal'
 import { getVencimientos } from '../services/bancos'
+import { EUR } from '../utils/format'
 
-const EUR = (v) => (v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 const fmtFecha = (f) => {
   if (!f) return ''
   const [y, m, d] = String(f).split('-')
@@ -55,7 +55,7 @@ export default function VtosSelector({ empresaId, onSelect, onClose }) {
 
   const totalSeleccionado = items
     .filter((v) => seleccionados.has(v.id))
-    .reduce((s, v) => s + (v.pendiente ?? v.importe ?? 0), 0)
+    .reduce((s, v) => s + Number(v.pendiente ?? v.importe ?? 0), 0)
 
   const todosSeleccionados = items.length > 0 && seleccionados.size === items.length
 
