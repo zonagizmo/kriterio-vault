@@ -5,6 +5,239 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.12] — 2026-09-24 — Fix NaN en saldos bancarios
+
+### Corregido
+- **`BancosPage.jsx`** — saldos mostraban `NaN €` porque Pydantic v2 serializa `Decimal` como string; `+` concatenaba strings en vez de sumar. Envueltos operandos con `Number()` en 5 expresiones.
+- **`MovimientosBancoPage.jsx`** — mismo fix en 3 expresiones (saldoBase, saldo header, saldoReal por movimiento).
+
+---
+
+## [1.11.11] — 2026-09-23 — Lifespan (punto 18 RECOMENDACIONES.md)
+
+### Modificado
+- **`main.py`** — migrado de `@app.on_event("startup")` / `@app.on_event("shutdown")` (deprecated) a `lifespan` con `@asynccontextmanager`. Eliminados 4 DeprecationWarning por test.
+
+---
+
+## [1.11.10] — 2026-09-23 — Rate limiting (punto 17 RECOMENDACIONES.md)
+
+### Añadido
+- **`middleware/rate_limit.py`** — integración de `slowapi` con rate limiting in-memory por IP.
+- **`api/auth.py`** — login limitado a 10 requests/minuto por IP (previene brute force).
+- **`api/sync.py`** — push limitado a 60 requests/minuto por API key (previene abuso de sync).
+- **`tests/test_rate_limit.py`** — 3 tests verificando rate limit, mensaje de error y endpoints no afectados.
+
+### Dependencias
+- Añadido `slowapi==0.1.10` a `requirements.txt`.
+
+---
+
+## [1.11.09] — 2026-09-23 — Modal de confirmación custom (punto 16 RECOMENDACIONES.md)
+
+### Añadido
+- **`components/ConfirmModal.jsx`** — componente modal reutilizable con 3 variantes (danger/warning/info), icono SVG, botones de confirmar/cancelar, soporte Escape y clic fuera.
+
+### Modificado
+- **13 archivos** — reemplazadas 25 llamadas a `window.confirm()` nativo por `ConfirmModal`. Cada página ahora muestra un modal temático con icono, título, mensaje y botones estilizados. Archivos modificados: BancosPage, TabCuentas, TabDiagnostico, EmpresasSelectorPage, UsuariosSistemaPage, AlbaranesPage, UsuariosPage (2 sub-componentes), ExtrasPage, AjustesPage, MovimientosBancoPage, TabDiario, FacturasPage, TabBalance.
+
+---
+
+## [1.11.08] — 2026-09-23 — Health check endpoint (punto 13 RECOMENDACIONES.md)
+
+### Añadido
+- **`api/health.py`** — endpoint `GET /health` sin autenticación. Verifica conectividad de DB con `SELECT 1`. Retorna `{"status": "ok", "db": "connected"}` o `{"status": "error", "db": "..."}` con HTTP 503.
+- **`tests/test_health.py`** — 2 tests (respuesta 200 + content-type JSON).
+
+---
+
+## [1.11.07] — 2026-09-23 — Decimal para dinero (punto 12 RECOMENDACIONES.md)
+
+### Corregido
+- **`db/decimal_adapter.py`** — adaptador SQLite para serialización/deserialización de `Decimal`.
+- **Modelos (6 archivos)** — todos los campos `Numeric` ahora usan `Mapped[Decimal]` en vez de `Mapped[float]` (36 campos: bancos, clientes_proveedores, contabilidad, facturacion, configuracion, usuarios).
+- **Schemas Pydantic (5 archivos)** — todos los campos de dinero cambiados de `float` a `Decimal` (facturacion, bancos, clientes_proveedores, contabilidad, extras, usuarios).
+- **Services (5 archivos)** — eliminados ~80 casts `float()` en documentos.py, bancos.py, contabilidad.py, extras.py, estadisticas.py, facturas.py. Aritmética nativa Decimal.
+- **API endpoints (3 archivos)** — eliminados casts `float()` en facturas.py, bancos.py, contabilidad.py.
+- **Tests** — actualizados asserts de `float` a `Decimal` en test_documentos.py.
+
+### Base de datos
+- No requiere cambios (SQLite almacena como texto, Decimal se serializa/deserializa vía adapter).
+
+### Compatibilidad
+- Compatible con la versión 1.11.06. El frontend recibe números JSON igual que antes.
+
+---
+
+## [1.11.06] — 2026-09-22 — CrudPage con columnas configurables (punto 10 RECOMENDACIONES.md, fase 4)
+
+### Modificado
+- **`CrudPage.jsx`** — columnas ahora son configurables vía prop `columns` (array de `{ key, header, render, className, align }`). Columnas por defecto mantienen compatibilidad con Clientes/Proveedores. Soporta datos externos vía prop `items` (sin useCrud interno). Botón "Nuevo" configurable vía `nuevoLabel`.
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.11.05.
+
+---
+
+## [1.11.05] — 2026-09-22 — Componente CrudPage genérico (punto 10 RECOMENDACIONES.md, fase 3)
+
+### Añadido
+- **`src/components/CrudPage.jsx`** — componente CRUD genérico reutilizable con tabla, búsqueda, paginación y modal. Acepta `titulo`, `entityName`, `service`, `emptyForm`, `FormBody`, `renderActions`.
+
+### Modificado
+- **ClientesPage.jsx** — refactorizado a wrapper de 49 líneas (antes 174). Usa `CrudPage` + `FormContacto`.
+- **ProveedoresPage.jsx** — refactorizado a wrapper de 49 líneas (antes 170). Usa `CrudPage` + `FormContacto`.
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.11.04.
+
+---
+
+## [1.11.04] — 2026-09-22 — Código compartido: utils/format.js + hook useCrud (punto 10 RECOMENDACIONES.md)
+
+### Añadido
+- **`src/utils/format.js`** — funciones de formato centralizadas: `EUR`, `EUR0`, `EURplain`, `fmtFecha`, `hoy`. Reemplaza definiciones duplicadas en 13 archivos.
+- **`src/hooks/useCrud.js`** — hook genérico para páginas CRUD con tabla + paginación + modal. encapsula estado (`datos`, `q`, `skip`, `limit`, `cargando`, `error`, `modal`, `form`, `editId`, `guardando`) y operaciones (`cargar`, `abrirNuevo`, `abrirEditar`, `cerrar`, `guardar`, `eliminar`). Soporta filtros extra vía `extraParams`/`extraDeps`.
+
+### Modificado
+- **13 páginas** actualizadas para importar EUR/fmtFecha/hoy de `utils/format.js` en vez de definirlos localmente: BancosPage, ExtrasPage, IngresosGastosPage, EstadisticasPage, UsuariosPage, MovimientosBancoPage, InicioPage, FacturasPage, AlbaranesPage, ClientesPage, ProveedoresPage, ArticulosPage, contabilidad/utils.js.
+- **ClientesPage, ProveedoresPage, ArticulosPage** refactorizadas para usar `useCrud`. Eliminados ~120 líneas de estado y operaciones CRUD repetidas.
+- **FacturasPage, AlbaranesPage**: const `HOY` ahora usa `hoy()` (función) en vez de constante estática (corrige bug de medianoche).
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.11.03.
+
+---
+
+## [1.11.03] — 2026-09-22 — División ContabilidadPage.jsx (punto 9 RECOMENDACIONES.md)
+
+### Modificado
+- **`ContabilidadPage.jsx` dividido en 10 archivos** (punto 9 RECOMENDACIONES.md): de 2.026 líneas monolítico a módulos separados en `pages/contabilidad/`:
+  - `utils.js` — funciones compartidas (`EUR`, `fmtFecha`, `anioActual`)
+  - `TabCuentas.jsx` — pestaña Plan de cuentas
+  - `TabDiario.jsx` — pestaña Diario (incluye `FilaAsiento`, `AsientoModal`)
+  - `TabMayor.jsx` — pestaña Libro mayor (incluye `ModalExportMayor`)
+  - `TabSumasSaldos.jsx` — pestaña Sumas y saldos
+  - `TabPyG.jsx` — pestaña P&G
+  - `TabBalance.jsx` — pestaña Balance (incluye `ModalCierre`)
+  - `TabConciliacion.jsx` — pestaña Conciliación (incluye `FilaBanco`)
+  - `TabDiagnostico.jsx` — pestaña Diagnóstico
+  - `ContabilidadPage.jsx` — orquestador principal (~100 líneas)
+- Import en `App.jsx` actualizado de `./pages/ContabilidadPage` a `./pages/contabilidad`.
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.11.02. Sin cambios de API ni modelos.
+
+---
+
+## [1.11.02] — 2026-09-22 — Fix rutas API, backup paths, refactor funciones largas, optimización N+1
+
+### Corregido
+- **Doble prefijo `/api/` en 5 servicios frontend**: `bancos.js`, `contabilidad.js`, `extras.js`, `ajustes.js`, `usuarios.js` usaban `BASE = '/api/...'` con axios `baseURL: '/api'`, generando URLs `/api/api/...` (404). Corregido a `BASE = '/...'`.
+- **Rutas de backup relativas**: `ajustes.py` usaba `Path("./backups")` que dependía del CWD del proceso. Corregido a rutas absolutas basadas en `__file__`.
+
+### Modificado
+- **Refactorización de 3 funciones >100 líneas** (punto 6 RECOMENDACIONES.md):
+  - `get_conciliacion_bancos`: 230 → ~65 líneas. Extraídas 5 sub-funciones: `_calcular_saldos_banco`, `_emparejar_por_numero`, `_emparejar_por_fecha_importe`, `_emparejar_transferencias`, `_detectar_asientos_huerfanos`.
+  - `generar_asiento_banco`: 196 → ~30 líneas. Extraídas 4 sub-funciones: `_debe_generar_asiento_banco`, `_resolver_cuenta_pago`, `_construir_lineas_asiento`, `_detectar_asiento_migrado`.
+  - `update_movimiento`: 180 → ~50 líneas. Extraídas 5 sub-funciones: `_detectar_cambio_contable`, `_actualizar_total`, `_restaurar_pagos_viejos`, `_crear_pagos_nuevos`, `_gestionar_asiento_contable`.
+- **Optimización N+1 queries en facturas** (punto 7 RECOMENDACIONES.md): Nueva función `_batch_cargar_info` carga pago_info y fecha_vto en 4 queries en vez de ~5N. `get_facturas_emi` y `get_facturas_rec` ahora usan batch loading (~250 queries → 4 por listado de 50 facturas).
+- **Añadido try/catch** en `cargarBancos` de `BancosPage.jsx`.
+
+### Base de datos
+- No requiere cambios.
+
+### Compatibilidad
+- Compatible con la versión 1.11.01.
+
+---
+
+## [1.11.01] — 2026-09-21 — Tests backend: 96 tests, 45% coverage
+
+### Nuevo
+- **Infraestructura de tests**: `pytest`, `httpx`, `pytest-cov` instalados; `pyproject.toml` con config de pytest; `tests/conftest.py` con BD SQLite en memoria por test, fixtures por rol (`admin_user`, `operador_user`, `solo_lectura_user`), tokens JWT, y `TestClient` de FastAPI con override de `get_db`.
+- **`test_auth_service.py`** (11 tests): hash/verify bcrypt, creación/decodificación de tokens JWT, expiración, firma.
+- **`test_auth_api.py`** (20 tests): login OK/incorrecto/inexistente/inactivo, `/me` con/ sin token, cambiar-password, CRUD usuarios (listar, crear, duplicado, rol inválido, actualizar, reset password, eliminar, autoeliminar, desactivar self).
+- **`test_documentos.py`** (15 tests): `calcular_importe_linea` (simples y con descuentos), `siguiente_numero` (primera, después de existente, empresas/modelos independientes), `siguiente_cnumero` (primero del año, después de existente, años independientes), `total_lineas`.
+- **`test_bancos.py`** (10 tests): `siguiente_numero_vencimiento` (primero, después de existente, pagos huérfanos, empresas independientes), `_aplicar_pago_pendiente` (total, parcial, superior, abono), `_restaurar_pendiente` (parcial, tope en importe).
+- **`test_contabilidad.py`** (17 tests): `_clasificar_balance` (15 ramas PGC: ANC/AC/PN/PNC/PC/None), `_build_asiento` (vacío, debe, haber, cuadrado, descuadrado, None importe, metadatos), `get_cuenta`/`delete_cuenta` (existe, no existe, sin/con apuntes).
+- **`test_facturas.py`** (8 tests): `_total_previsto` (vacío, una línea, varias, None fields), `_renumerar` (todas, desde_id, empresas independientes, ID inexistente), `get_factura_emi` (existe, no existe).
+
+### Modificado
+- `conftest.py`: importa todos los modelos ORM para que `Base.metadata.create_all()` registre todas las tablas (incluye `empresas` para FK constraints); crea 4 `Empresa` de prueba por defecto.
+- `test_auth_api.py`: `test_me_sin_token` espera 401 (no 403) — `get_current_user` lanza 401 cuando no hay token.
+- `test_bancos.py`/`test_documentos.py`: `fecha` usa `datetime.date()` en vez de strings (SQLAlchemy `Date` type requiere objetos `date`).
+
+### Coverage
+- **Global**: 45% (5414 stmts, 2971 missed)
+- **`auth.py`**: 81%
+- **`documentos.py`**: 63%
+- **`facturas.py`**: 20%
+- **`contabilidad.py`**: 10%
+- **`bancos.py`**: 12%
+- **Models**: 100%
+- **Schemas**: 100%
+
+---
+
+## [1.11.00] — 2026-09-21 — Auth completo: roles, CRUD usuarios, fix passlib
+
+### Nuevo
+- **Sistema de roles**: `admin`, `operador`, `solo_lectura`. Cada usuario tiene un rol asignado.
+- **CRUD de usuarios del sistema** (solo admin):
+  - `GET /api/auth/usuarios` — listar usuarios
+  - `POST /api/auth/usuarios` — crear usuario
+  - `PUT /api/auth/usuarios/{id}` — actualizar usuario
+  - `POST /api/auth/usuarios/{id}/reset-password` — resetear contraseña
+  - `DELETE /api/auth/usuarios/{id}` — eliminar usuario
+- **Página `UsuariosSistemaPage`**: gestión completa de usuarios del sistema con tabla, formularios y modales.
+- **Enlace "Usuarios del sistema"** en el sidebar (visible solo para admin).
+- **`get_optional_user()`**: dependencia opcional para endpoints que funcionan con o sin autenticación.
+
+### Modificado
+- **Auth importado de version1**: modelo `UsuarioSistema` con campos `password_hash`, `nombre`, `email`, `rol` (reemplaza modelo viejo sin roles).
+- **`services/auth.py`**: usa `HTTPBearer` + `bcrypt` nativo directamente (elimina bug de incompatibilidad passlib+bcrypt 4.x).
+- **`api/auth.py`**: login devuelve `usuario` dict con `id`, `username`, `nombre`, `email`, `rol`. Solo admin puede gestionar usuarios.
+- **`schemas/auth.py`**: nuevos schemas `LoginResponse`, `UsuarioToken`, `UsuarioSistemaCreate`, `UsuarioSistemaUpdate`, `CambioPasswordAdmin`.
+- **`App.jsx`**: `EmpresaProvider` solo se monta después del login (evita loop de 401 en `/login`).
+- **`api.js`**: interceptor no redirige a `/login` si ya estamos en `/login` (evita recarga infinita).
+- **`Layout.jsx`**: muestra nombre completo del usuario y enlace admin a usuarios-sistema.
+- **`main.py`**: eliminado `_crear_admin_por_defecto()`, añadida migración SQL para tabla `usuarios_sistema`.
+- **14 routers**: auth re-activado con `dependencies=[Depends(get_current_user)]`.
+- **Ruta absoluta en `.env`**: `DATABASE_URL` ahora usa ruta absoluta para evitar confusiones con BD duplicadas.
+
+### Corregido
+- **Bug passlib+bcrypt 4.x**: `pwd_context.verify()` fallaba silenciosamente con `AttributeError: module 'bcrypt' has no attribute '__about__'`. Solucionado reemplazando passlib por `bcrypt` nativo (`hashpw`/`checkpw`).
+- **Loop infinito en `/login`**: `EmpresaProvider` llamaba `getEmpresas()` sin token → 401 → recarga → ciclo. Solucionado moviendo `EmpresaProvider` dentro de `ProtectedRoute`.
+- **Recarga de página en 401**: interceptor hacía `window.location.href = '/login'` incluso ya en `/login`. Solucionado con condición `pathname !== '/login'`.
+- **BD duplicada**: ruta relativa `sqlite:///./gestionmgd.db` con `setsid` apuntaba a BD diferente. Solucionado con ruta absoluta.
+
+### Eliminado
+- `models/usuarios_sistema.py` (modelo duplicado, fusionado en `models/usuarios.py`).
+- `contexts/AuthContext.jsx` (reemplazado por `hooks/useAuth.jsx`).
+- `_crear_admin_por_defecto()` de `main.py` (admin se crea manualmente con script).
+
+### Base de datos
+- Tabla `usuarios_sistema` recreada con esquema nuevo: `password_hash`, `nombre`, `email`, `rol`, `created_at`.
+- Migración SQL automática en `_migraciones()` para instalaciones SQLite existentes.
+
+### Compatibilidad
+- Requiere recrear usuario admin: `python scripts/create_admin.py` o crear manualmente desde la UI.
+
+---
+
 ## [1.10.04] — 2026-09-18 — Autenticación JWT + Login
 
 ### Nuevo

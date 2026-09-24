@@ -2,16 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
 import {
   getBancos, createBanco, updateBanco, deleteBanco,
   getVencimientos, updateVencimiento,
 } from '../services/bancos'
-
-const EUR = (v) =>
-  (v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-
-const hoy = () => new Date().toISOString().slice(0, 10)
+import { EUR, hoy } from '../utils/format'
 
 // ── Pestaña Cuentas ───────────────────────────────────────────────────────────
 
@@ -19,6 +16,7 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   const [modal, setModal] = useState(null) // null | 'nuevo' | banco
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
+  const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null })
 
   const abrirNuevo = () => {
     setForm({ nombre: '', sucursal: '', numcta: '', cuenta: '', notas: '', saldoini: 0 })
@@ -53,13 +51,18 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   }
 
   const eliminar = async (b) => {
-    if (!confirm(`¿Eliminar el banco "${b.nombre}"?`)) return
-    try {
-      await deleteBanco(b.id)
-      reload()
-    } catch (e) {
-      alert(e.message || 'No se puede eliminar (tiene movimientos u otros registros asociados)')
-    }
+    setConfirmState({
+      open: true,
+      msg: `¿Eliminar el banco "${b.nombre}"?`,
+      action: async () => {
+        try {
+          await deleteBanco(b.id)
+          reload()
+        } catch (e) {
+          alert(e.message || 'No se puede eliminar (tiene movimientos u otros registros asociados)')
+        }
+      },
+    })
   }
 
   return (
@@ -92,8 +95,8 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
                 <td className="px-4 py-3 text-gray-600 font-mono text-xs">{b.cuenta}</td>
                 <td className="px-4 py-3 text-gray-600">{b.notas}</td>
                 <td className="px-4 py-3 text-right text-gray-600">{EUR(b.saldoini)}</td>
-                <td className={`px-4 py-3 text-right font-semibold ${((b.saldoini ?? 0) + (b.saldoact ?? 0)) < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                  {EUR((b.saldoini ?? 0) + (b.saldoact ?? 0))}
+                <td className={`px-4 py-3 text-right font-semibold ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                  {EUR(Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0))}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button className="btn btn-secondary text-xs mr-2" onClick={() => onVerMovimientos(b.numero)}>Movimientos</button>
@@ -149,6 +152,16 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        open={confirmState.open}
+        title="Eliminar banco"
+        message={confirmState.msg}
+        confirmText="Eliminar"
+        variant="danger"
+        onConfirm={async () => { await confirmState.action(); setConfirmState({ open: false, msg: '', action: null }) }}
+        onCancel={() => setConfirmState({ open: false, msg: '', action: null })}
+      />
     </div>
   )
 }
@@ -306,8 +319,13 @@ export default function BancosPage() {
 
   const cargarBancos = useCallback(async () => {
     if (!empresa) return
-    const data = await getBancos(empresa.id)
-    setBancos(data)
+    try {
+      const data = await getBancos(empresa.id)
+      setBancos(data)
+    } catch (e) {
+      console.error('Error cargando bancos:', e)
+      setBancos([])
+    }
   }, [empresa])
 
   useEffect(() => { cargarBancos() }, [cargarBancos])
@@ -348,8 +366,8 @@ export default function BancosPage() {
                 className="card px-4 py-3 text-left hover:ring-2 hover:ring-mgd-400 transition-all cursor-pointer group"
               >
                 <p className="text-xs text-gray-500 truncate">{b.nombre}</p>
-                <p className={`text-lg font-bold mt-0.5 ${((b.saldoini ?? 0) + (b.saldoact ?? 0)) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {EUR((b.saldoini ?? 0) + (b.saldoact ?? 0))}
+                <p className={`text-lg font-bold mt-0.5 ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                  {EUR(Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0))}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Saldo inicial: {EUR(b.saldoini)}
@@ -362,7 +380,7 @@ export default function BancosPage() {
             <div className="card px-4 py-3 bg-mgd-50 border-mgd-200">
               <p className="text-xs text-mgd-600 font-medium">Total</p>
               <p className="text-lg font-bold mt-0.5 text-mgd-800">
-                {EUR(bancos.reduce((s, b) => s + (b.saldoini ?? 0) + (b.saldoact ?? 0), 0))}
+                {EUR(bancos.reduce((s, b) => s + Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0), 0))}
               </p>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
 import VtosSelector from '../components/VtosSelector'
 import AutocompleteCuenta from '../components/AutocompleteCuenta'
@@ -15,15 +16,7 @@ import {
   repararSaldosBanco,
 } from '../services/bancos'
 import { getCuentas } from '../services/contabilidad'
-
-const EUR = (v) =>
-  (v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-const hoy = () => new Date().toISOString().slice(0, 10)
-const fmtFecha = (f) => {
-  if (!f) return ''
-  const [y, m, d] = String(f).split('-')
-  return `${d}/${m}/${y}`
-}
+import { EUR, hoy, fmtFecha } from '../utils/format'
 
 const mapPagoFromApi = (p) => {
   const hasVto   = p.vto   != null && p.vto   !== 0
@@ -75,6 +68,8 @@ export default function MovimientosBancoPage() {
   const filaRef = useRef(null)
   const [nuevoId, setNuevoId] = useState(null)
   const saltarUltima = useRef(true)   // flag: en la primera carga saltar a última página
+  const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null, variant: 'danger', title: '' })
+  const pendingTraspaso = useRef(null)
 
   useEffect(() => {
     const handler = (e) => {
@@ -288,7 +283,7 @@ export default function MovimientosBancoPage() {
   const esNuevo = modal === 'nuevo'
   const totalNum = parseFloat(form.total) || 0
   const saldoBase = bancoActual
-    ? (bancoActual.saldoini ?? 0) + (bancoActual.saldoact ?? 0)
+    ? Number(bancoActual.saldoini ?? 0) + Number(bancoActual.saldoact ?? 0)
     : 0
   const saldoNuevo = esNuevo
     ? saldoBase + totalNum
@@ -324,8 +319,22 @@ export default function MovimientosBancoPage() {
     const vtosRotos = pagos.filter((p) => p._tipo === 'V' && p.vto_existe === false)
     if (vtosRotos.length > 0) {
       const nums = vtosRotos.map((p) => `nº ${p.vto}`).join(', ')
-      if (!confirm(`Aviso: los vencimientos ${nums} no existen actualmente.\n\nEs posible que el documento correspondiente haya sido eliminado. El pago quedará sin vincular a ningún documento; revisa la línea o selecciona un vencimiento válido.\n\n¿Continuar guardando?`)) return
+      setConfirmState({
+        open: true,
+        title: 'Vencimientos no existen',
+        msg: `Aviso: los vencimientos ${nums} no existen actualmente.\n\nEs posible que el documento correspondiente haya sido eliminado. El pago quedará sin vincular a ningún documento; revisa la línea o selecciona un vencimiento válido.\n\n¿Continuar guardando?`,
+        confirmText: 'Continuar',
+        variant: 'warning',
+        action: async () => {
+          await guardarConfirmado()
+        },
+      })
+      return
     }
+    await guardarConfirmado()
+  }
+
+  const guardarConfirmado = async () => {
     setGuardando(true)
     try {
       const pagosClean = pagos
@@ -355,11 +364,32 @@ export default function MovimientosBancoPage() {
           created = await createMovimiento(payload)
         } catch (err) {
           if (err.detail?.traspaso_sospechoso) {
-            if (!confirm(`${err.detail.mensaje}\n\n¿Guardar de todas formas como movimiento independiente?`)) {
-              setGuardando(false)
-              return
-            }
-            created = await createMovimiento({ ...payload, forzar: true })
+            pendingTraspaso.current = payload
+            setConfirmState({
+              open: true,
+              title: 'Traspaso sospechoso',
+              msg: `${err.detail.mensaje}\n\n¿Guardar de todas formas como movimiento independiente?`,
+              confirmText: 'Forzar guardado',
+              variant: 'warning',
+              action: async () => {
+                try {
+                  const created = await createMovimiento({ ...pendingTraspaso.current, forzar: true })
+                  pendingTraspaso.current = null
+                  setNuevoId(created.id)
+                  setForm(formVacio())
+                  setPagos([])
+                  fechaRef.current?.focus()
+                  saltarUltima.current = true
+                  if (skip === 0) { cargar() } else { setSkip(0) }
+                  getBancos(empresa.id).then(setBancos).catch(() => {})
+                } catch (e2) {
+                  setError('Error al guardar el movimiento')
+                } finally {
+                  setGuardando(false)
+                }
+              },
+            })
+            return
           } else {
             throw err
           }
@@ -400,14 +430,22 @@ export default function MovimientosBancoPage() {
   }
 
   const eliminar = async (mov) => {
-    if (!confirm('¿Eliminar este movimiento? Se revertirán los pagos asociados.')) return
-    try {
-      await deleteMovimiento(mov.id)
-      cargar()
-      getBancos(empresa.id).then(setBancos).catch(() => {})
-    } catch {
-      alert('Error al eliminar')
-    }
+    setConfirmState({
+      open: true,
+      title: 'Eliminar movimiento',
+      msg: '¿Eliminar este movimiento? Se revertirán los pagos asociados.',
+      confirmText: 'Eliminar',
+      variant: 'danger',
+      action: async () => {
+        try {
+          await deleteMovimiento(mov.id)
+          cargar()
+          getBancos(empresa.id).then(setBancos).catch(() => {})
+        } catch {
+          alert('Error al eliminar')
+        }
+      },
+    })
   }
 
   const reordenar = async (mov, direccion) => {
@@ -446,8 +484,8 @@ export default function MovimientosBancoPage() {
               <p className="text-sm text-gray-500 flex items-center gap-3">
                 {empresa.nombre}
                 {bancoActual.saldoact != null && (
-                  <span className={`font-medium ${((bancoActual.saldoini ?? 0) + (bancoActual.saldoact ?? 0)) < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                    Saldo: {EUR((bancoActual.saldoini ?? 0) + (bancoActual.saldoact ?? 0))}
+                  <span className={`font-medium ${Number(bancoActual.saldoini ?? 0) + Number(bancoActual.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                    Saldo: {EUR(Number(bancoActual.saldoini ?? 0) + Number(bancoActual.saldoact ?? 0))}
                   </span>
                 )}
                 <button
@@ -538,7 +576,7 @@ export default function MovimientosBancoPage() {
             )}
             {movs.map((m, idx) => {
               const bancoDelMov = bancos.find((b) => b.numero === m.banco)
-              const saldoReal = (bancoDelMov?.saldoini ?? 0) + (m.saldonue ?? 0)
+              const saldoReal = Number(bancoDelMov?.saldoini ?? 0) + Number(m.saldonue ?? 0)
               const puedeSubir = idx > 0 && movs[idx - 1].fecha === m.fecha && movs[idx - 1].banco === m.banco
               const puedeBajar = idx < movs.length - 1 && movs[idx + 1].fecha === m.fecha && movs[idx + 1].banco === m.banco
               return (
@@ -954,6 +992,16 @@ export default function MovimientosBancoPage() {
           onClose={() => setMostrarVtos(false)}
         />
       )}
+
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.msg}
+        confirmText={confirmState.confirmText}
+        variant={confirmState.variant}
+        onConfirm={async () => { await confirmState.action(); setConfirmState({ open: false, msg: '', action: null, variant: 'danger', title: '' }) }}
+        onCancel={() => { pendingTraspaso.current = null; setConfirmState({ open: false, msg: '', action: null, variant: 'danger', title: '' }); setGuardando(false) }}
+      />
       </div>
     </div>
   )
