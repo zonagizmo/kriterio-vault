@@ -360,15 +360,21 @@ def _resultado_ejercicio_anterior(db: Session, empresa_id: int, anio: int) -> fl
     raw = db.query(func.sum(Banco.saldoini)).filter(
         Banco.empresa_id == empresa_id,
     ).scalar() or 0
-    return -(raw or 0)
+    return float(raw or 0)
 
 
 def evolucion_mensual(db: Session, empresa_id: int, anio: int) -> list:
     meses = []
+    resultado_anterior = None
     for mes in range(1, _ultimo_mes_con_datos(anio) + 1):
         desde, hasta = _limites_mes(anio, mes)
-        ingresos = round(ingresos_periodo(db, empresa_id, desde, hasta), 2)
-        gastos = round(gastos_periodo(db, empresa_id, desde, hasta), 2)
+        ingresos = float(round(ingresos_periodo(db, empresa_id, desde, hasta), 2))
+        gastos = float(round(gastos_periodo(db, empresa_id, desde, hasta), 2))
+        if mes == 1:
+            ingresos = round(ingresos + _resultado_ejercicio_anterior(db, empresa_id, anio), 2)
+        else:
+            ingresos = round(ingresos + (resultado_anterior or 0), 2)
+        resultado_anterior = round(ingresos - gastos, 2)
         meses.append({"mes": mes, "ingresos": float(ingresos), "gastos": float(gastos)})
     return meses
 

@@ -5,6 +5,14 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.16] — 2026-09-24 — Fix signo saldo inicial en estadísticas
+
+### Corregido
+- **`estadisticas.py`** — `_resultado_ejercicio_anterior` devolvía `-(saldoini)` (signo invertido), restando el saldo inicial de los ingresos de enero. Ahora devuelve el valor positivo.
+- **`estadisticas.py`** — Restaurada la acumulación en `evolucion_mensual`: enero incluye saldo inicial de bancos, el resto de meses arrastra el resultado anterior (ingresos - gastos).
+
+---
+
 ## [1.11.15] — 2026-09-24 — Fix estadísticas: TypeError Decimal+float y valores negativos
 
 ### Corregido
