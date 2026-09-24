@@ -19,7 +19,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 
 | # | Problema | Detalle |
 |---|----------|---------|
-| 5 | **Raw SQL extenso** | `usuarios.py` y `contabilidad.py` usan SQL crudo masivo en vez de ORM. Riesgo de SQL injection en `sync_replay.py:90-97` donde se interpola `tabla` con f-string. **Pendiente** — validar tabla contra whitelist antes de interpolar. |
+| 5 | **~~Raw SQL extenso~~** | ~~`usuarios.py` y `contabilidad.py` usan SQL crudo masivo en vez de ORM. Riesgo de SQL injection en `sync_replay.py:90-97` donde se interpola `tabla` con f-string.~~ **Corregido en v1.11.21**: whitelist de tablas en `_corregir_uuid()`. SQL injection en `_eliminar_asiento_banco()` fixeado (f-string → ORM `.in_()`). 12 queries raw SQL convertidas a ORM en `usuarios.py` (9) y `contabilidad.py` (3). Se mantienen raw SQL en `get_cuentas` (agregación compleja parametrizada) y `_crear_lineas_raw` (FK sort error documentado). |
 | 6 | **~~Funciones >100 líneas~~** | ~~`generar_asiento_banco` (~200 líneas), `update_movimiento` (~180 líneas), `get_conciliacion_bancos` (~230 líneas).~~ **Corregido en v1.11.02**: refactorizadas en sub-funciones (< 65 líneas cada una). |
 | 7 | **~~N+1 queries en facturas~~** | ~~Listados de 50 facturas ejecutan ~300 queries adicionales para cargar pagos y vencimientos.~~ **Corregido en v1.11.02**: `_batch_cargar_info` carga datos en 4 queries en vez de ~5N. |
 | 8 | **Node.js 14 EOL** | `iniciar.sh` usa Node 14 (EOL abril 2023). Vulnerabilidades de seguridad conocidas. Usar Node 18 o 20 LTS. **Pendiente** — requiere verificar compatibilidad de Vite v4.5.14 con Node 18+. |

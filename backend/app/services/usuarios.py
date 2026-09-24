@@ -3,6 +3,7 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from app.models.usuarios import UsuarioNNA, PagaNNA
 from app.models.clientes_proveedores import Vencimiento
+from app.models.contabilidad import Diario, Cuenta
 from app.schemas.usuarios import UsuarioCreate, UsuarioUpdate, PagaCreate, RegistroMensualCreate
 from app.services.sync import registrar_operacion
 import time
@@ -34,70 +35,74 @@ def get_usuario(db: Session, usuario_id: int):
 
 def get_saldos_nna(db: Session, empresa_id: int) -> dict:
     """Devuelve {numero: saldo} calculado desde diario para todas las cuentas 4001xxx."""
-    rows = db.execute(text("""
-        SELECT CAST(SUBSTR(cuenta, 5) AS INTEGER) AS numero,
-               ROUND(SUM(importe), 2) AS saldo
-        FROM diario
-        WHERE empresa_id = :e AND cuenta LIKE '4001%'
-        GROUP BY cuenta
-    """), {"e": empresa_id}).fetchall()
-    return {int(r[0]): float(r[1]) for r in rows}
+    rows = (
+        db.query(
+            func.substr(Diario.cuenta, 5),
+            func.round(func.sum(Diario.importe), 2),
+        )
+        .filter(
+            Diario.empresa_id == empresa_id,
+            Diario.cuenta.like('4001%'),
+        )
+        .group_by(Diario.cuenta)
+        .all()
+    )
+    return {int(r[0]): float(r[1] or 0) for r in rows}
 
 
 def create_usuario(db: Session, data: UsuarioCreate) -> dict:
     for intento in range(5):
         try:
-            numero = db.execute(text(
-                "SELECT COALESCE(MAX(numero), 0) + 1 FROM usuarios_nna WHERE empresa_id = :e"
-            ), {"e": data.empresa_id}).scalar()
+            numero = (db.query(func.coalesce(func.max(UsuarioNNA.numero), 0)).filter(
+                UsuarioNNA.empresa_id == data.empresa_id
+            ).scalar() or 0) + 1
             cuenta = _cuenta_nna(numero)
             nombre = (data.nombre or '').strip()
-            # INSERT crudo (no ORM): hay que rellenar a mano las columnas de sync, ya que
-            # el default de SyncMixin solo se aplica al instanciar el modelo por SQLAlchemy.
-            nuevo_uuid = str(uuid_lib.uuid4())
-            ahora = datetime.datetime.utcnow()
 
-            db.execute(text("""
-                INSERT INTO usuarios_nna
-                    (empresa_id, numero, nombre, apellidos, fecha_nacimiento,
-                     fecha_ingreso, fecha_salida, paga_mensual, activo, notas,
-                     uuid, version, created_at, updated_at)
-                VALUES (:e, :n, :nom, :ap, :fn, :fi, :fs, :ps, :act, :notas,
-                        :uuid, 1, :ahora, :ahora)
-            """), {
-                "e": data.empresa_id, "n": numero, "nom": nombre,
-                "ap": getattr(data, 'apellidos', None),
-                "fn": getattr(data, 'fecha_nacimiento', None),
-                "fi": getattr(data, 'fecha_ingreso', None),
-                "fs": getattr(data, 'fecha_salida', None),
-                "ps": data.paga_mensual or 0,
-                "act": 1 if getattr(data, 'activo', True) else 0,
-                "notas": getattr(data, 'notas', None),
-                "uuid": nuevo_uuid, "ahora": ahora,
-            })
+            nuevo = UsuarioNNA(
+                empresa_id=data.empresa_id,
+                numero=numero,
+                nombre=nombre,
+                apellidos=getattr(data, 'apellidos', None),
+                fecha_nacimiento=getattr(data, 'fecha_nacimiento', None),
+                fecha_ingreso=getattr(data, 'fecha_ingreso', None),
+                fecha_salida=getattr(data, 'fecha_salida', None),
+                paga_mensual=data.paga_mensual or 0,
+                activo=getattr(data, 'activo', True),
+                notas=getattr(data, 'notas', None),
+                uuid=str(uuid_lib.uuid4()),
+                version=1,
+                created_at=datetime.datetime.utcnow(),
+                updated_at=datetime.datetime.utcnow(),
+            )
+            db.add(nuevo)
 
             # Crear la cuenta 4001xxx si no existe
-            existe = db.execute(text(
-                "SELECT id FROM cuentas WHERE empresa_id=:e AND cuenta=:c"
-            ), {"e": data.empresa_id, "c": cuenta}).scalar()
-            if not existe:
-                db.execute(text(
-                    "INSERT INTO cuentas (empresa_id, cuenta, texto, marca, debe, haber) VALUES (:e, :c, :t, NULL, 0, 0)"
-                ), {"e": data.empresa_id, "c": cuenta, "t": nombre})
+            existe_cuenta = db.query(Cuenta).filter(
+                Cuenta.empresa_id == data.empresa_id,
+                Cuenta.cuenta == cuenta,
+            ).first()
+            if not existe_cuenta:
+                db.add(Cuenta(
+                    empresa_id=data.empresa_id,
+                    cuenta=cuenta,
+                    texto=nombre,
+                    debe=0,
+                    haber=0,
+                ))
 
-            registrar_operacion(db, data.empresa_id, 'usuarios_nna', nuevo_uuid, 'C', data.model_dump(mode='json'))
+            registrar_operacion(db, data.empresa_id, 'usuarios_nna', nuevo.uuid, 'C', data.model_dump(mode='json'))
             db.commit()
+            db.refresh(nuevo)
 
-            row = db.execute(text(
-                "SELECT id, empresa_id, numero, nombre, apellidos, fecha_nacimiento, "
-                "fecha_ingreso, fecha_salida, paga_mensual, activo, notas "
-                "FROM usuarios_nna WHERE empresa_id=:e AND numero=:n"
-            ), {"e": data.empresa_id, "n": numero}).fetchone()
-            return dict(zip(
-                ["id", "empresa_id", "numero", "nombre", "apellidos", "fecha_nacimiento",
-                 "fecha_ingreso", "fecha_salida", "paga_mensual", "activo", "notas"],
-                row
-            ))
+            return {
+                "id": nuevo.id, "empresa_id": nuevo.empresa_id, "numero": nuevo.numero,
+                "nombre": nuevo.nombre, "apellidos": nuevo.apellidos,
+                "fecha_nacimiento": nuevo.fecha_nacimiento,
+                "fecha_ingreso": nuevo.fecha_ingreso, "fecha_salida": nuevo.fecha_salida,
+                "paga_mensual": nuevo.paga_mensual, "activo": nuevo.activo,
+                "notas": nuevo.notas,
+            }
         except IntegrityError:
             db.rollback()
             if intento < 4:
@@ -120,9 +125,12 @@ def update_usuario(db: Session, usuario_id: int, data: UsuarioUpdate) -> Usuario
         setattr(u, k, v)
     # Sincronizar nombre en la cuenta contable si cambió
     if nombre:
-        db.execute(text(
-            "UPDATE cuentas SET texto=:t WHERE empresa_id=:e AND cuenta=:c"
-        ), {"t": nombre, "e": u.empresa_id, "c": _cuenta_nna(u.numero)})
+        cuenta_obj = db.query(Cuenta).filter(
+            Cuenta.empresa_id == u.empresa_id,
+            Cuenta.cuenta == _cuenta_nna(u.numero),
+        ).first()
+        if cuenta_obj:
+            cuenta_obj.texto = nombre
     registrar_operacion(db, u.empresa_id, 'usuarios_nna', u.uuid, 'U',
                         data.model_dump(exclude_unset=True, mode='json'))
     db.commit()
@@ -143,9 +151,10 @@ def delete_usuario(db: Session, usuario_id: int) -> bool:
             f"No se puede eliminar a {u.nombre}: tiene {n_pagas} pagas registradas. "
             "Elimina primero sus pagas."
         )
-    n_diario = db.execute(text(
-        "SELECT COUNT(*) FROM diario WHERE empresa_id=:e AND cuenta=:c"
-    ), {"e": u.empresa_id, "c": _cuenta_nna(u.numero)}).scalar()
+    n_diario = db.query(func.count(Diario.id)).filter(
+        Diario.empresa_id == u.empresa_id,
+        Diario.cuenta == _cuenta_nna(u.numero),
+    ).scalar()
     if n_diario:
         raise ValueError(
             f"No se puede eliminar a {u.nombre}: su cuenta {_cuenta_nna(u.numero)} "
@@ -199,29 +208,36 @@ def _crear_diario_paga(db: Session, empresa_id: int, paga_id: int,
     Protegido contra race conditions con reintento automático."""
     for intento in range(5):
         try:
-            asiento = db.execute(text(
-                "SELECT COALESCE(MAX(asiento), 0) + 1 FROM diario WHERE empresa_id=:e"
-            ), {"e": empresa_id}).scalar()
+            asiento = (db.query(func.coalesce(func.max(Diario.asiento), 0)).filter(
+                Diario.empresa_id == empresa_id
+            ).scalar() or 0) + 1
             cuenta_nna = _cuenta_nna(usuario_numero)
             clave = f"PAG{paga_id}"
             imp = round(importe, 2)
 
-            db.execute(text(
-                "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
-                " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, '6780007', 0)"
-            ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id, "imp": imp})
-            db.execute(text(
-                "UPDATE cuentas SET debe=ROUND(debe+:v,2) WHERE empresa_id=:e AND cuenta='6780007'"
-            ), {"v": imp, "e": empresa_id})
+            db.add(Diario(
+                empresa_id=empresa_id, asiento=asiento, fecha=fecha,
+                tpasiento='PAG', clave=clave, tipo='P', numero=paga_id,
+                importe=imp, cuenta='6780007', saldo=0,
+            ))
+            cuenta_678 = db.query(Cuenta).filter(
+                Cuenta.empresa_id == empresa_id,
+                Cuenta.cuenta == '6780007',
+            ).first()
+            if cuenta_678:
+                cuenta_678.debe = round((cuenta_678.debe or 0) + imp, 2)
 
-            db.execute(text(
-                "INSERT INTO diario (empresa_id, asiento, fecha, tpasiento, clave, tipo, numero, importe, cuenta, saldo)"
-                " VALUES (:e, :as, :f, 'PAG', :cl, 'P', :num, :imp, :cta, 0)"
-            ), {"e": empresa_id, "as": asiento, "f": fecha, "cl": clave, "num": paga_id,
-                "imp": round(-importe, 2), "cta": cuenta_nna})
-            db.execute(text(
-                "UPDATE cuentas SET haber=ROUND(haber+:v,2) WHERE empresa_id=:e AND cuenta=:c"
-            ), {"v": imp, "e": empresa_id, "c": cuenta_nna})
+            db.add(Diario(
+                empresa_id=empresa_id, asiento=asiento, fecha=fecha,
+                tpasiento='PAG', clave=clave, tipo='P', numero=paga_id,
+                importe=round(-importe, 2), cuenta=cuenta_nna, saldo=0,
+            ))
+            cuenta_nna_obj = db.query(Cuenta).filter(
+                Cuenta.empresa_id == empresa_id,
+                Cuenta.cuenta == cuenta_nna,
+            ).first()
+            if cuenta_nna_obj:
+                cuenta_nna_obj.haber = round((cuenta_nna_obj.haber or 0) + imp, 2)
             return
         except IntegrityError:
             db.rollback()
@@ -233,24 +249,24 @@ def _crear_diario_paga(db: Session, empresa_id: int, paga_id: int,
 
 def _borrar_diario_paga(db: Session, empresa_id: int, paga_id: int):
     """Elimina las entradas de diario de una paga NNA y revierte la caché de cuentas."""
-    rows = db.execute(text(
-        "SELECT cuenta, importe FROM diario WHERE empresa_id=:e AND tipo='P' AND numero=:pid"
-    ), {"e": empresa_id, "pid": paga_id}).fetchall()
-    for cuenta, importe in rows:
-        if not cuenta:
+    lineas = db.query(Diario).filter(
+        Diario.empresa_id == empresa_id,
+        Diario.tipo == 'P',
+        Diario.numero == paga_id,
+    ).all()
+    for l in lineas:
+        if not l.cuenta:
             continue
-        imp = round(float(importe or 0), 2)
-        if imp > 0:
-            db.execute(text(
-                "UPDATE cuentas SET debe=ROUND(debe-:v,2) WHERE empresa_id=:e AND cuenta=:c"
-            ), {"v": imp, "e": empresa_id, "c": cuenta})
-        elif imp < 0:
-            db.execute(text(
-                "UPDATE cuentas SET haber=ROUND(haber-:v,2) WHERE empresa_id=:e AND cuenta=:c"
-            ), {"v": abs(imp), "e": empresa_id, "c": cuenta})
-    db.execute(text(
-        "DELETE FROM diario WHERE empresa_id=:e AND tipo='P' AND numero=:pid"
-    ), {"e": empresa_id, "pid": paga_id})
+        imp = round(float(l.importe or 0), 2)
+        cuenta_obj = db.query(Cuenta).filter(
+            Cuenta.empresa_id == empresa_id,
+            Cuenta.cuenta == l.cuenta,
+        ).first()
+        if cuenta_obj and imp > 0:
+            cuenta_obj.debe = round((cuenta_obj.debe or 0) - imp, 2)
+        elif cuenta_obj and imp < 0:
+            cuenta_obj.haber = round((cuenta_obj.haber or 0) - abs(imp), 2)
+        db.delete(l)
 
 
 def _crear_vencimiento_paga(db: Session, empresa_id: int, paga_id: int,
@@ -296,15 +312,20 @@ def _borrar_vencimiento_paga(db: Session, empresa_id: int, paga_id: int):
 def create_paga(db: Session, data: PagaCreate) -> PagaNNA:
     nuevo_uuid = str(uuid_lib.uuid4())
     ahora = datetime.datetime.utcnow()
-    db.execute(text("""
-        INSERT INTO pagas_nna (empresa_id, usuario, fecha, importe, notas,
-                               uuid, version, created_at, updated_at)
-        VALUES (:e, :u, :f, :imp, :n, :uuid, 1, :ahora, :ahora)
-    """), {"e": data.empresa_id, "u": data.usuario, "f": data.fecha,
-           "imp": round(data.importe, 2), "n": data.notas,
-           "uuid": nuevo_uuid, "ahora": ahora})
+    paga = PagaNNA(
+        empresa_id=data.empresa_id,
+        usuario=data.usuario,
+        fecha=data.fecha,
+        importe=round(data.importe, 2),
+        notas=data.notas,
+        uuid=nuevo_uuid,
+        version=1,
+        created_at=ahora,
+        updated_at=ahora,
+    )
+    db.add(paga)
     db.flush()
-    paga_id = db.execute(text("SELECT last_insert_rowid()")).scalar()
+    paga_id = paga.id
 
     _crear_diario_paga(db, data.empresa_id, paga_id, data.usuario, data.fecha, data.importe)
     _crear_vencimiento_paga(db, data.empresa_id, paga_id, data.usuario, data.fecha, data.importe)
@@ -321,7 +342,7 @@ def delete_paga(db: Session, paga_id: int) -> bool:
     entidad_uuid, empresa_id = p.uuid, p.empresa_id
     _borrar_vencimiento_paga(db, p.empresa_id, paga_id)  # lanza ValueError si está pagada por banco
     _borrar_diario_paga(db, p.empresa_id, paga_id)
-    db.execute(text("DELETE FROM pagas_nna WHERE id=:pid"), {"pid": paga_id})
+    db.delete(p)
     registrar_operacion(db, empresa_id, 'pagas_nna', entidad_uuid, 'D')
     db.commit()
     return True
@@ -334,10 +355,10 @@ def registrar_mes(db: Session, data: RegistroMensualCreate) -> list[PagaNNA]:
     extra dentro del mes pueden registrarse individualmente."""
     # Usuarios con paga ya registrada en el mes de data.fecha
     ya_pagados = {
-        r[0] for r in db.execute(text("""
-            SELECT DISTINCT usuario FROM pagas_nna
-            WHERE empresa_id = :e AND strftime('%Y-%m', fecha) = :mes
-        """), {"e": data.empresa_id, "mes": data.fecha.strftime('%Y-%m')}).fetchall()
+        r[0] for r in db.query(PagaNNA.usuario).filter(
+            PagaNNA.empresa_id == data.empresa_id,
+            func.strftime('%Y-%m', PagaNNA.fecha) == data.fecha.strftime('%Y-%m'),
+        ).distinct().all()
     }
     pagas = []
     for item in data.items:
@@ -347,15 +368,20 @@ def registrar_mes(db: Session, data: RegistroMensualCreate) -> list[PagaNNA]:
             continue
         nuevo_uuid = str(uuid_lib.uuid4())
         ahora = datetime.datetime.utcnow()
-        db.execute(text("""
-            INSERT INTO pagas_nna (empresa_id, usuario, fecha, importe, notas,
-                                   uuid, version, created_at, updated_at)
-            VALUES (:e, :u, :f, :imp, :n, :uuid, 1, :ahora, :ahora)
-        """), {"e": data.empresa_id, "u": item.usuario, "f": data.fecha,
-               "imp": round(item.importe, 2), "n": item.notas,
-               "uuid": nuevo_uuid, "ahora": ahora})
+        paga = PagaNNA(
+            empresa_id=data.empresa_id,
+            usuario=item.usuario,
+            fecha=data.fecha,
+            importe=round(item.importe, 2),
+            notas=item.notas,
+            uuid=nuevo_uuid,
+            version=1,
+            created_at=ahora,
+            updated_at=ahora,
+        )
+        db.add(paga)
         db.flush()
-        paga_id = db.execute(text("SELECT last_insert_rowid()")).scalar()
+        paga_id = paga.id
         _crear_diario_paga(db, data.empresa_id, paga_id, item.usuario, data.fecha, item.importe)
         _crear_vencimiento_paga(db, data.empresa_id, paga_id, item.usuario, data.fecha, item.importe)
         registrar_operacion(db, data.empresa_id, 'pagas_nna', nuevo_uuid, 'C', {

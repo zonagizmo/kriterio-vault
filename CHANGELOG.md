@@ -5,6 +5,19 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.21] — 2026-09-24 — Punto 5: SQL injection fix + refactor raw SQL → ORM
+
+### Corregido
+- **`sync_replay.py`** — Añadida whitelist de tablas en `_corregir_uuid()` para prevenir SQL injection (antes interpolaba `tabla` en f-string sin validación).
+- **`contabilidad.py`** — Fix SQL injection en `_eliminar_asiento_banco()`: `DELETE FROM diario WHERE id IN (f-string)` → `db.query(Diario).filter(Diario.id.in_(...)).delete()`.
+
+### Refactorizado
+- **`usuarios.py`** — 9 queries raw SQL convertidas a ORM: `get_saldos_nna`, `create_usuario`, `update_usuario`, `delete_usuario`, `_crear_diario_paga`, `_borrar_diario_paga`, `create_paga`, `delete_paga`, `registrar_mes`.
+- **`contabilidad.py`** — 3 queries raw SQL convertidas a ORM: `get_pyg` (saldo_inicial), `_eliminar_asiento_banco` (UPDATE cuentas), `generar_asiento_extra` (DiarioTxt upsert).
+- **Se mantienen raw SQL** en `get_cuentas` (agregación compleja parametrizada) y `_crear_lineas_raw` (FK sort error documentado).
+
+---
+
 ## [1.11.20] — 2026-09-24 — Punto 19: Headers de seguridad en Caddy
 
 ### Añadido

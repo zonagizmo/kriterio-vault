@@ -692,21 +692,16 @@ def get_pyg(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta=None) ->
     ti = round(sum(f['importe'] for f in ingresos), 2)
 
     # Saldo inicial de bancos (cuentas 57xxxx del asiento de apertura, tpasiento='A')
-    q_saldo = """
-        SELECT COALESCE(SUM(importe), 0)
-        FROM diario
-        WHERE empresa_id = :e
-          AND cuenta LIKE '57%'
-          AND tpasiento = 'A'
-    """
-    params = {"e": empresa_id}
+    saldo_query = db.query(func.coalesce(func.sum(Diario.importe), 0)).filter(
+        Diario.empresa_id == empresa_id,
+        Diario.cuenta.like('57%'),
+        Diario.tpasiento == 'A',
+    )
     if fecha_desde:
-        q_saldo += " AND fecha >= :fd"
-        params["fd"] = fecha_desde
+        saldo_query = saldo_query.filter(Diario.fecha >= fecha_desde)
     if fecha_hasta:
-        q_saldo += " AND fecha <= :fh"
-        params["fh"] = fecha_hasta
-    saldo_inicial = db.execute(_text(q_saldo), params).scalar() or 0
+        saldo_query = saldo_query.filter(Diario.fecha <= fecha_hasta)
+    saldo_inicial = saldo_query.scalar() or 0
 
     return {
         'gastos': gastos,
@@ -1065,14 +1060,17 @@ def _eliminar_asiento_banco(db: Session, empresa_id: int, banco_cuenta: str, num
     for l in lines_to_delete:
         if l.cuenta:
             imp = l.importe or 0
-            if imp > 0:
-                db.execute(_text("UPDATE cuentas SET debe=ROUND(debe-:v,2) WHERE empresa_id=:e AND cuenta=:c"),
-                           {"v": imp, "e": empresa_id, "c": l.cuenta})
-            else:
-                db.execute(_text("UPDATE cuentas SET haber=ROUND(haber-:v,2) WHERE empresa_id=:e AND cuenta=:c"),
-                           {"v": abs(imp), "e": empresa_id, "c": l.cuenta})
+            cuenta_obj = db.query(Cuenta).filter(
+                Cuenta.empresa_id == empresa_id,
+                Cuenta.cuenta == l.cuenta,
+            ).first()
+            if cuenta_obj:
+                if imp > 0:
+                    cuenta_obj.debe = round((cuenta_obj.debe or 0) - imp, 2)
+                else:
+                    cuenta_obj.haber = round((cuenta_obj.haber or 0) - abs(imp), 2)
     if ids_to_delete:
-        db.execute(_text(f"DELETE FROM diario WHERE id IN ({','.join(str(i) for i in ids_to_delete)})"))
+        db.query(Diario).filter(Diario.id.in_(ids_to_delete)).delete(synchronize_session='fetch')
     # Volcar cambios ORM pendientes ANTES de expirar: expire_all() descarta las
     # modificaciones no flusheadas (p.ej. conciliado/texto del movimiento en edición)
     db.flush()
@@ -1141,23 +1139,23 @@ def generar_asiento_extra(db: Session, empresa_id: int, extra) -> dict | None:
     if not lineas:
         return None
 
-    # Upsert DiarioTxt — raw SQL para evitar FK sort error de SQLAlchemy
-    from sqlalchemy import text as _text
-    exists = db.execute(_text(
-        "SELECT id FROM diario_txt WHERE empresa_id=:e AND tipo='X' AND numero=:n"
-    ), {"e": empresa_id, "n": extra.numero}).first()
-    if exists:
-        db.execute(_text(
-            "UPDATE diario_txt SET texto=:tx, notas=:no, fecha=:f"
-            " WHERE empresa_id=:e AND tipo='X' AND numero=:n"
-        ), {"tx": extra.texto or None, "no": extra.notas or None,
-            "f": extra.fecha, "e": empresa_id, "n": extra.numero})
+    # Upsert DiarioTxt
+    from app.models.contabilidad import DiarioTxt
+    existente = db.query(DiarioTxt).filter(
+        DiarioTxt.empresa_id == empresa_id,
+        DiarioTxt.tipo == 'X',
+        DiarioTxt.numero == extra.numero,
+    ).first()
+    if existente:
+        existente.texto = extra.texto or None
+        existente.notas = extra.notas or None
+        existente.fecha = extra.fecha
     else:
-        db.execute(_text(
-            "INSERT INTO diario_txt (empresa_id, tipo, numero, texto, notas, fecha)"
-            " VALUES (:e, 'X', :n, :tx, :no, :f)"
-        ), {"e": empresa_id, "n": extra.numero, "tx": extra.texto or None,
-            "no": extra.notas or None, "f": extra.fecha})
+        db.add(DiarioTxt(
+            empresa_id=empresa_id, tipo='X', numero=extra.numero,
+            texto=extra.texto or None, notas=extra.notas or None,
+            fecha=extra.fecha,
+        ))
     return _build_asiento(lineas)
 
 

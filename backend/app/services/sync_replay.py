@@ -83,10 +83,15 @@ SYNC_REGISTRO = {
 }
 
 
+_SYNC_TABLAS_VALIDAS = frozenset(SYNC_REGISTRO.keys())
+
+
 def _corregir_uuid(db: Session, tabla: str, id_creado: int, entidad_uuid: str):
     """Las funciones crear_* generan su propio uuid (vía SyncMixin); hay que
     forzarlo al uuid original de la instalación de origen para que la fila
     tenga la misma identidad en todas las instalaciones."""
+    if tabla not in _SYNC_TABLAS_VALIDAS:
+        raise ReplayError(f"Tabla no válida para _corregir_uuid: {tabla}")
     actual = db.execute(
         text(f"SELECT uuid FROM {tabla} WHERE id = :id"), {"id": id_creado}
     ).scalar()
