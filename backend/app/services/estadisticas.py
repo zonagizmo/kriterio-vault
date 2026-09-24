@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.models.facturacion import FacturaEmitida, FacturaRecibida
@@ -32,7 +33,7 @@ def _suma_diario(db: Session, empresa_id: int, tipos, cuentas, desde, hasta,
         query = query.filter(Diario.cuenta.in_(cuentas))
     if prefijo:
         query = query.filter(Diario.cuenta.like(f'{prefijo}%'))
-    return float(query.scalar() or 0)
+    return query.scalar() or 0
 
 
 def _filtro_estado_valido(modelo):
@@ -52,7 +53,7 @@ def _abonos_proveedor(db: Session, empresa_id: int, desde, hasta) -> float:
         FacturaRecibida.total < 0,
         _filtro_estado_valido(FacturaRecibida),
     ).scalar() or 0
-    return round(-float(raw), 2)
+    return -(raw or 0)
 
 
 def _abonos_cliente(db: Session, empresa_id: int, desde, hasta) -> float:
@@ -66,7 +67,7 @@ def _abonos_cliente(db: Session, empresa_id: int, desde, hasta) -> float:
         FacturaEmitida.total < 0,
         _filtro_estado_valido(FacturaEmitida),
     ).scalar() or 0
-    return round(-float(raw), 2)
+    return -(raw or 0)
 
 
 def ingresos_periodo(db: Session, empresa_id: int, desde, hasta) -> float:
@@ -80,7 +81,7 @@ def ingresos_periodo(db: Session, empresa_id: int, desde, hasta) -> float:
     # Las líneas de abono en el diario van en negativo (convención D+/H-)
     banco = -_suma_diario(db, empresa_id, ('B',), CUENTAS_INGRESO_BANCO, desde, hasta)
     abonos_proveedor = _abonos_proveedor(db, empresa_id, desde, hasta)
-    return round(float(facturas) + banco + abonos_proveedor, 2)
+    return (facturas or 0) + banco + abonos_proveedor
 
 
 def gastos_periodo(db: Session, empresa_id: int, desde, hasta) -> float:
@@ -96,7 +97,7 @@ def gastos_periodo(db: Session, empresa_id: int, desde, hasta) -> float:
     # también cuenta (igual que en el P&G).
     extras_y_pagas = _suma_diario(db, empresa_id, ('X', 'P'), None, desde, hasta, prefijo='6')
     abonos_cliente = _abonos_cliente(db, empresa_id, desde, hasta)
-    return round(float(facturas) + extras_y_pagas + abonos_cliente, 2)
+    return (facturas or 0) + extras_y_pagas + abonos_cliente
 
 
 def ingresos_por_categoria(db: Session, empresa_id: int, desde, hasta) -> list:
@@ -112,7 +113,7 @@ def ingresos_por_categoria(db: Session, empresa_id: int, desde, hasta) -> list:
     abonos_proveedor = _abonos_proveedor(db, empresa_id, desde, hasta)
 
     categorias = [
-        {"categoria": "Facturas emitidas", "importe": round(float(facturas), 2)},
+        {"categoria": "Facturas emitidas", "importe": facturas or 0},
         {"categoria": "Cheques fundación", "importe": round(banco, 2)},
     ]
     if abs(abonos_proveedor) >= 0.01:
@@ -137,7 +138,7 @@ def gastos_por_categoria(db: Session, empresa_id: int, desde, hasta) -> list:
     abonos_cliente = _abonos_cliente(db, empresa_id, desde, hasta)
 
     categorias = [
-        {"categoria": "Facturas recibidas", "importe": round(float(facturas), 2)},
+        {"categoria": "Facturas recibidas", "importe": facturas or 0},
         {"categoria": "Gastos generales", "importe": round(generales, 2)},
         {"categoria": "Pagas NNA", "importe": round(pagas_nna, 2)},
         {"categoria": "Salidas terapéuticas", "importe": round(terapeuticas, 2)},
@@ -178,7 +179,7 @@ def _listado_ingresos_banco(db: Session, empresa_id: int, desde, hasta) -> list:
             "fecha": fecha,
             "origen": "Cheques fundación",
             "concepto": texto or "Ingreso banco",
-            "importe": round(-float(importe or 0), 2),
+            "importe": -(importe or 0),
         })
     return resultado
 
@@ -204,7 +205,7 @@ def listado_ingresos(db: Session, empresa_id: int, desde, hasta) -> list:
             "fecha": f.fecha,
             "origen": "Factura emitida",
             "concepto": concepto,
-            "importe": round(float(f.total or 0), 2),
+            "importe": f.total or 0,
         })
 
     # Facturas de abono de proveedor (total negativo): dinero a nuestro favor,
@@ -228,7 +229,7 @@ def listado_ingresos(db: Session, empresa_id: int, desde, hasta) -> list:
             "fecha": f.fecha,
             "origen": "Abono proveedor",
             "concepto": concepto,
-            "importe": round(-float(f.total or 0), 2),
+            "importe": -(f.total or 0),
         })
 
     filas += _listado_ingresos_banco(db, empresa_id, desde, hasta)
@@ -256,7 +257,7 @@ def listado_gastos(db: Session, empresa_id: int, desde, hasta) -> list:
             "origen": "Factura recibida",
             "proveedor": proveedor,
             "nfactura": f.prfactura or "",
-            "importe": round(float(f.total or 0), 2),
+            "importe": f.total or 0,
         })
 
     # Facturas de abono a cliente (total negativo): dinero a favor del cliente,
@@ -279,7 +280,7 @@ def listado_gastos(db: Session, empresa_id: int, desde, hasta) -> list:
             "origen": "Abono cliente",
             "proveedor": cliente,
             "nfactura": "",
-            "importe": round(-float(f.total or 0), 2),
+            "importe": -(f.total or 0),
         })
 
     # Extras (gastos generales, salidas terapéuticas y pagas NNA legacy tipo M)
@@ -306,7 +307,7 @@ def listado_gastos(db: Session, empresa_id: int, desde, hasta) -> list:
             "origen": origen_cuenta.get(cuenta, "Extra"),
             "proveedor": ext_map.get(numero) or f"Extra nº{numero}",
             "nfactura": "",
-            "importe": round(float(importe or 0), 2),
+            "importe": importe or 0,
         })
 
     # Pagas NNA del módulo dedicado (activo desde 2026-06-30)
@@ -328,7 +329,7 @@ def listado_gastos(db: Session, empresa_id: int, desde, hasta) -> list:
             "origen": "Pagas NNA",
             "proveedor": concepto,
             "nfactura": "",
-            "importe": round(float(p.importe or 0), 2),
+            "importe": p.importe or 0,
         })
 
     filas.sort(key=lambda r: r["fecha"] or datetime.date.min)
@@ -359,26 +360,16 @@ def _resultado_ejercicio_anterior(db: Session, empresa_id: int, anio: int) -> fl
     raw = db.query(func.sum(Banco.saldoini)).filter(
         Banco.empresa_id == empresa_id,
     ).scalar() or 0
-    return round(float(raw), 2)
+    return -(raw or 0)
 
 
 def evolucion_mensual(db: Session, empresa_id: int, anio: int) -> list:
     meses = []
-    resultado_anterior = None
     for mes in range(1, _ultimo_mes_con_datos(anio) + 1):
         desde, hasta = _limites_mes(anio, mes)
-        ingresos = ingresos_periodo(db, empresa_id, desde, hasta)
-        gastos = gastos_periodo(db, empresa_id, desde, hasta)
-        if mes == 1:
-            # En enero, el resultado del ejercicio anterior (beneficio/pérdida
-            # trasladado por la apertura) también cuenta como ingreso del mes.
-            ingresos = round(ingresos + _resultado_ejercicio_anterior(db, empresa_id, anio), 2)
-        else:
-            # En los demás meses, el resultado (ingresos - gastos) del mes
-            # anterior también cuenta como ingreso, arrastrando el saldo mes a mes.
-            ingresos = round(ingresos + resultado_anterior, 2)
-        resultado_anterior = round(ingresos - gastos, 2)
-        meses.append({"mes": mes, "ingresos": ingresos, "gastos": gastos})
+        ingresos = round(ingresos_periodo(db, empresa_id, desde, hasta), 2)
+        gastos = round(gastos_periodo(db, empresa_id, desde, hasta), 2)
+        meses.append({"mes": mes, "ingresos": float(ingresos), "gastos": float(gastos)})
     return meses
 
 
@@ -386,7 +377,7 @@ def saldos_bancos_mensual(db: Session, empresa_id: int, anio: int) -> list:
     """Saldo total de todos los bancos/cajas al final de cada mes del año,
     hasta el mes en curso si el año consultado es el actual."""
     bancos = db.query(Banco).filter(Banco.empresa_id == empresa_id).order_by(Banco.numero).all()
-    saldo_inicial_total = sum(float(b.saldoini or 0) for b in bancos)
+    saldo_inicial_total = float(sum(b.saldoini or 0 for b in bancos))
 
     ultimo_mes = _ultimo_mes_con_datos(anio)
 
@@ -401,16 +392,16 @@ def saldos_bancos_mensual(db: Session, empresa_id: int, anio: int) -> list:
     deltas_por_mes = {int(m): float(d or 0) for m, d in movs if m is not None}
 
     # Saldo acumulado justo antes del 1 de enero del año consultado
-    saldo_previo = db.query(func.sum(MovBanco.total)).filter(
+    saldo_previo = float(db.query(func.sum(MovBanco.total)).filter(
         MovBanco.empresa_id == empresa_id,
         MovBanco.fecha < datetime.date(anio, 1, 1),
-    ).scalar() or 0
-    acumulado = saldo_inicial_total + float(saldo_previo)
+    ).scalar() or 0)
+    acumulado = saldo_inicial_total + saldo_previo
 
     resultado = []
     for mes in range(1, ultimo_mes + 1):
         acumulado = round(acumulado + deltas_por_mes.get(mes, 0.0), 2)
-        resultado.append({"mes": mes, "saldo": acumulado})
+        resultado.append({"mes": mes, "saldo": float(acumulado)})
     return resultado
 
 

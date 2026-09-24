@@ -5,6 +5,14 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.15] — 2026-09-24 — Fix estadísticas: TypeError Decimal+float y valores negativos
+
+### Corregido
+- **`estadisticas.py`** — `saldos_bancos_mensual` crasheaba con `TypeError: Decimal + float` (tras migración a `Numeric`). Ahora `saldo_inicial_total`, `deltas_por_mes` y `saldo_previo` se convierten a `float` explícitamente.
+- **`estadisticas.py`** — `evolucion_mensual` sumaba `resultado_anterior` a `ingresos` de cada mes, mezclando el acumulado con los ingresos puros. Resultado: ingresos negativos e invisibles en el gráfico. Ahora devuelve ingresos y gastos puros por mes.
+
+---
+
 ## [1.11.14] — 2026-09-24 — Fix suma vencimientos en VtosSelector
 
 ### Corregido
