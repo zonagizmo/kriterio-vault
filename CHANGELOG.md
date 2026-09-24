@@ -5,6 +5,13 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.17] — 2026-09-24 — Fix Libro Mayor: saldo y totales Decimal/string
+
+### Corregido
+- **`TabMayor.jsx`** — `saldoAcum`, `totalDebe` y `totalHaber` concatenaban strings Decimal en vez de sumar. Añadido `Number()` en las 5 expresiones afectadas.
+
+---
+
 ## [1.11.16] — 2026-09-24 — Fix signo saldo inicial en estadísticas
 
 ### Corregido
