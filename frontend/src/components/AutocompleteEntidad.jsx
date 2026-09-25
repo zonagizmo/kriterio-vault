@@ -1,22 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
 
-export default function AutocompleteEntidad({ items, value, onChange, placeholder = 'Buscar por nombre o CIF...', tabIndex, clearable = false }) {
-  const [query, setQuery]           = useState('')
-  const [abierto, setAbierto]       = useState(false)
+export default function AutocompleteEntidad({
+  items,
+  value,
+  onChange,
+  placeholder = 'Buscar por nombre o CIF...',
+  tabIndex,
+  clearable = false,
+}) {
+  const [query, setQuery] = useState('')
+  const [abierto, setAbierto] = useState(false)
   const [highlighted, setHighlighted] = useState(-1)
-  const ref     = useRef(null)
+  const ref = useRef(null)
   const listRef = useRef(null)
 
   const seleccionado = items.find((i) => i.numero === value)
 
-  const filtrados = query.length >= 1
-    ? items
-        .filter((i) =>
-          i.nombre?.toLowerCase().includes(query.toLowerCase()) ||
-          i.nif?.toLowerCase().includes(query.toLowerCase())
-        )
-        .slice(0, 25)
-    : []
+  const filtrados =
+    query.length >= 1
+      ? items
+          .filter(
+            (i) =>
+              i.nombre?.toLowerCase().includes(query.toLowerCase()) ||
+              i.nif?.toLowerCase().includes(query.toLowerCase()),
+          )
+          .slice(0, 25)
+      : []
 
   // Cerrar al clicar fuera
   useEffect(() => {
@@ -77,7 +86,12 @@ export default function AutocompleteEntidad({ items, value, onChange, placeholde
           tabIndex={tabIndex ?? 0}
           className="input cursor-pointer flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-mgd-500"
           onClick={abrir}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir() } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              abrir()
+            }
+          }}
         >
           <span className="truncate flex-1">{seleccionado.nombre}</span>
           <span className="text-xs text-gray-400 shrink-0">{seleccionado.nif}</span>
@@ -85,8 +99,14 @@ export default function AutocompleteEntidad({ items, value, onChange, placeholde
             <button
               type="button"
               className="text-gray-300 hover:text-gray-600 shrink-0 leading-none"
-              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); onChange('') }}
-            >✕</button>
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onChange('')
+              }}
+            >
+              ✕
+            </button>
           )}
         </div>
       ) : (
@@ -95,7 +115,11 @@ export default function AutocompleteEntidad({ items, value, onChange, placeholde
           className="input"
           placeholder={placeholder}
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setAbierto(true); setHighlighted(-1) }}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setAbierto(true)
+            setHighlighted(-1)
+          }}
           onFocus={() => setAbierto(true)}
           onKeyDown={onKeyDown}
         />
@@ -103,7 +127,10 @@ export default function AutocompleteEntidad({ items, value, onChange, placeholde
 
       {/* Dropdown de resultados */}
       {abierto && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-auto" ref={listRef}>
+        <div
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-auto"
+          ref={listRef}
+        >
           {filtrados.length === 0 ? (
             <p className="px-3 py-4 text-sm text-gray-400 text-center">
               {query.length < 1 ? 'Escribe para buscar…' : 'Sin resultados'}
@@ -131,14 +158,7 @@ export default function AutocompleteEntidad({ items, value, onChange, placeholde
       )}
 
       {/* Input oculto para validación required HTML5 */}
-      <input
-        tabIndex={-1}
-        required
-        value={value || ''}
-        onChange={() => {}}
-        className="sr-only"
-        aria-hidden="true"
-      />
+      <input tabIndex={-1} required value={value || ''} onChange={() => {}} className="sr-only" aria-hidden="true" />
     </div>
   )
 }

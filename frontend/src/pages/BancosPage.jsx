@@ -5,10 +5,14 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
 import {
-  getBancos, createBanco, updateBanco, deleteBanco,
-  getVencimientos, updateVencimiento,
+  getBancos,
+  createBanco,
+  updateBanco,
+  deleteBanco,
+  getVencimientos,
+  updateVencimiento,
 } from '../services/bancos'
-import { EUR, hoy } from '../utils/format'
+import { EUR } from '../utils/format'
 
 // ── Pestaña Cuentas ───────────────────────────────────────────────────────────
 
@@ -25,14 +29,24 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   }
 
   const abrirEditar = (b) => {
-    setForm({ numero: b.numero, nombre: b.nombre || '', sucursal: b.sucursal || '',
-      numcta: b.numcta || '', cuenta: b.cuenta || '', notas: b.notas || '', saldoini: b.saldoini || 0 })
+    setForm({
+      numero: b.numero,
+      nombre: b.nombre || '',
+      sucursal: b.sucursal || '',
+      numcta: b.numcta || '',
+      cuenta: b.cuenta || '',
+      notas: b.notas || '',
+      saldoini: b.saldoini || 0,
+    })
     setModal(b)
     setError('')
   }
 
   const guardar = async () => {
-    if (!form.nombre?.trim()) { setError('El nombre es obligatorio'); return }
+    if (!form.nombre?.trim()) {
+      setError('El nombre es obligatorio')
+      return
+    }
     try {
       if (modal === 'nuevo') {
         await createBanco({ ...form, empresa_id: empresa.id, saldoini: Number(form.saldoini) || 0 })
@@ -68,7 +82,9 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <button className="btn btn-primary" onClick={abrirNuevo}>+ Nueva cuenta</button>
+        <button className="btn btn-primary" onClick={abrirNuevo}>
+          + Nueva cuenta
+        </button>
       </div>
 
       <div className="card">
@@ -76,17 +92,31 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
           <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nº</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cuenta contable</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Notas</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Saldo inicial</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Saldo actual</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Nombre
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Cuenta contable
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Notas
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Saldo inicial
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Saldo actual
+              </th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {bancos.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Sin cuentas bancarias</td></tr>
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  Sin cuentas bancarias
+                </td>
+              </tr>
             )}
             {bancos.map((b) => (
               <tr key={b.id} className="hover:bg-gray-50">
@@ -95,13 +125,21 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
                 <td className="px-4 py-3 text-gray-600 font-mono text-xs">{b.cuenta}</td>
                 <td className="px-4 py-3 text-gray-600">{b.notas}</td>
                 <td className="px-4 py-3 text-right text-gray-600">{EUR(b.saldoini)}</td>
-                <td className={`px-4 py-3 text-right font-semibold ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                <td
+                  className={`px-4 py-3 text-right font-semibold ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-green-700'}`}
+                >
                   {EUR(Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0))}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button className="btn btn-secondary text-xs mr-2" onClick={() => onVerMovimientos(b.numero)}>Movimientos</button>
-                  <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(b)}>Editar</button>
-                  <button className="btn btn-danger text-xs" onClick={() => eliminar(b)}>Eliminar</button>
+                  <button className="btn btn-secondary text-xs mr-2" onClick={() => onVerMovimientos(b.numero)}>
+                    Movimientos
+                  </button>
+                  <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(b)}>
+                    Editar
+                  </button>
+                  <button className="btn btn-danger text-xs" onClick={() => eliminar(b)}>
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}
@@ -116,39 +154,74 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
             {modal !== 'nuevo' && (
               <div>
                 <label className="label">Nº (orden)</label>
-                <input type="number" min="1" className="input w-24 font-mono" value={form.numero}
-                  onChange={(e) => setForm({ ...form, numero: e.target.value })} />
+                <input
+                  type="number"
+                  min="1"
+                  className="input w-24 font-mono"
+                  value={form.numero}
+                  onChange={(e) => setForm({ ...form, numero: e.target.value })}
+                />
               </div>
             )}
             <div className={modal !== 'nuevo' ? '' : 'col-span-2'}>
               <label className="label">Nombre *</label>
-              <input className="input" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+              <input
+                className="input"
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Sucursal</label>
-              <input className="input" value={form.sucursal} onChange={(e) => setForm({ ...form, sucursal: e.target.value })} />
+              <input
+                className="input"
+                value={form.sucursal}
+                onChange={(e) => setForm({ ...form, sucursal: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">N.º cuenta (IBAN/CCC)</label>
-              <input className="input font-mono" value={form.numcta} onChange={(e) => setForm({ ...form, numcta: e.target.value })} />
+              <input
+                className="input font-mono"
+                value={form.numcta}
+                onChange={(e) => setForm({ ...form, numcta: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Cuenta contable</label>
-              <input className="input" value={form.cuenta} onChange={(e) => setForm({ ...form, cuenta: e.target.value })} />
+              <input
+                className="input"
+                value={form.cuenta}
+                onChange={(e) => setForm({ ...form, cuenta: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Saldo inicial</label>
-              <input type="number" step="0.01" className="input" value={form.saldoini}
-                onChange={(e) => setForm({ ...form, saldoini: e.target.value })} />
+              <input
+                type="number"
+                step="0.01"
+                className="input"
+                value={form.saldoini}
+                onChange={(e) => setForm({ ...form, saldoini: e.target.value })}
+              />
             </div>
             <div className="col-span-2">
               <label className="label">Notas</label>
-              <textarea className="input" rows={2} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} />
+              <textarea
+                className="input"
+                rows={2}
+                value={form.notas}
+                onChange={(e) => setForm({ ...form, notas: e.target.value })}
+              />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={guardar}>Guardar</button>
+            <button className="btn btn-secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button className="btn btn-primary" onClick={guardar}>
+              Guardar
+            </button>
           </div>
         </Modal>
       )}
@@ -159,13 +232,15 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
         message={confirmState.msg}
         confirmText="Eliminar"
         variant="danger"
-        onConfirm={async () => { await confirmState.action(); setConfirmState({ open: false, msg: '', action: null }) }}
+        onConfirm={async () => {
+          await confirmState.action()
+          setConfirmState({ open: false, msg: '', action: null })
+        }}
         onCancel={() => setConfirmState({ open: false, msg: '', action: null })}
       />
     </div>
   )
 }
-
 
 // ── Pestaña Vencimientos ──────────────────────────────────────────────────────
 
@@ -192,8 +267,12 @@ function TabVencimientos({ empresa }) {
     setTotal(data.total)
   }, [empresa.id, tipo, soloPendientes, skip, limit])
 
-  useEffect(() => { cargar() }, [cargar])
-  useEffect(() => { setSkip(0) }, [tipo, soloPendientes])
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+  useEffect(() => {
+    setSkip(0)
+  }, [tipo, soloPendientes])
 
   const abrirEditar = (v) => {
     setForm({ fecha: v.fecha ?? '', pendiente: v.pendiente ?? 0 })
@@ -215,7 +294,7 @@ function TabVencimientos({ empresa }) {
 
   const tipoLabel = (v) => {
     if (v.tipo === 'X') return v.extra_tipo === 'I' ? 'Extra (Ingreso)' : 'Extra (Gasto)'
-    return ({ R: 'Factura recibida', F: 'Factura emitida', N: 'Paga NNA' }[v.tipo] ?? v.tipo)
+    return { R: 'Factura recibida', F: 'Factura emitida', N: 'Paga NNA' }[v.tipo] ?? v.tipo
   }
 
   return (
@@ -227,8 +306,7 @@ function TabVencimientos({ empresa }) {
           <option value="X">Extra / Gastos</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-          <input type="checkbox" checked={soloPendientes}
-            onChange={(e) => setSoloPendientes(e.target.checked)} />
+          <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
           Solo pendientes
         </label>
         <span className="text-sm text-gray-500 flex-1">{total} vencimientos</span>
@@ -240,37 +318,61 @@ function TabVencimientos({ empresa }) {
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nº</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tipo</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cuenta</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Importe</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Pendiente</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Fecha
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Cuenta
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Importe
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Pendiente
+              </th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {vtos.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Sin vencimientos</td></tr>
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  Sin vencimientos
+                </td>
+              </tr>
             )}
             {vtos.map((v) => (
               <tr key={v.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-gray-500">{v.numero}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                    v.tipo === 'X' ? (v.extra_tipo === 'I' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800') :
-                    v.tipo === 'R' ? 'bg-red-100 text-red-800' :
-                    v.tipo === 'F' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
-                  }`}>
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      v.tipo === 'X'
+                        ? v.extra_tipo === 'I'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-orange-100 text-orange-800'
+                        : v.tipo === 'R'
+                          ? 'bg-red-100 text-red-800'
+                          : v.tipo === 'F'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
                     {tipoLabel(v)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{v.fecha}</td>
                 <td className="px-4 py-3 text-gray-600">{v.cuenta}</td>
                 <td className="px-4 py-3 text-right text-gray-700">{EUR(v.importe)}</td>
-                <td className={`px-4 py-3 text-right font-medium ${(v.pendiente ?? 0) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                <td
+                  className={`px-4 py-3 text-right font-medium ${(v.pendiente ?? 0) > 0 ? 'text-amber-600' : 'text-gray-400'}`}
+                >
                   {EUR(v.pendiente)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(v)}>Editar</button>
+                  <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(v)}>
+                    Editar
+                  </button>
                 </td>
               </tr>
             ))}
@@ -278,21 +380,38 @@ function TabVencimientos({ empresa }) {
         </table>
       </div>
 
-      <Paginacion total={total} skip={skip} limit={limit} onCambiar={setSkip}
-        onLimitChange={(n) => { setLimit(n); setSkip(0) }} />
+      <Paginacion
+        total={total}
+        skip={skip}
+        limit={limit}
+        onCambiar={setSkip}
+        onLimitChange={(n) => {
+          setLimit(n)
+          setSkip(0)
+        }}
+      />
 
       {editando && (
         <Modal titulo={`Vencimiento #${editando.numero}`} onClose={() => setEditando(null)}>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Fecha vencimiento</label>
-              <input type="date" className="input" value={form.fecha}
-                onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+              <input
+                type="date"
+                className="input"
+                value={form.fecha}
+                onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Pendiente</label>
-              <input type="number" step="0.01" className="input" value={form.pendiente}
-                onChange={(e) => setForm({ ...form, pendiente: e.target.value })} />
+              <input
+                type="number"
+                step="0.01"
+                className="input"
+                value={form.pendiente}
+                onChange={(e) => setForm({ ...form, pendiente: e.target.value })}
+              />
             </div>
           </div>
           <div className="mt-4 text-sm text-gray-500">
@@ -300,8 +419,12 @@ function TabVencimientos({ empresa }) {
             {editando.cuenta && <span className="ml-4">Cuenta: {editando.cuenta}</span>}
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <button className="btn btn-secondary" onClick={() => setEditando(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={guardar}>Guardar</button>
+            <button className="btn btn-secondary" onClick={() => setEditando(null)}>
+              Cancelar
+            </button>
+            <button className="btn btn-primary" onClick={guardar}>
+              Guardar
+            </button>
           </div>
         </Modal>
       )}
@@ -328,18 +451,16 @@ export default function BancosPage() {
     }
   }, [empresa])
 
-  useEffect(() => { cargarBancos() }, [cargarBancos])
+  useEffect(() => {
+    cargarBancos()
+  }, [cargarBancos])
 
   const irAMovimientos = (numeroB) => {
     navigate(`/bancos/${numeroB}/movimientos`)
   }
 
   if (!empresa) {
-    return (
-      <div className="p-8 text-center text-gray-400">
-        Selecciona una empresa para ver los datos bancarios.
-      </div>
-    )
+    return <div className="p-8 text-center text-gray-400">Selecciona una empresa para ver los datos bancarios.</div>
   }
 
   const tabs = [
@@ -366,12 +487,12 @@ export default function BancosPage() {
                 className="card px-4 py-3 text-left hover:ring-2 hover:ring-mgd-400 transition-all cursor-pointer group"
               >
                 <p className="text-xs text-gray-500 truncate">{b.nombre}</p>
-                <p className={`text-lg font-bold mt-0.5 ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                <p
+                  className={`text-lg font-bold mt-0.5 ${Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}
+                >
                   {EUR(Number(b.saldoini ?? 0) + Number(b.saldoact ?? 0))}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Saldo inicial: {EUR(b.saldoini)}
-                </p>
+                <p className="text-xs text-gray-400 mt-0.5">Saldo inicial: {EUR(b.saldoini)}</p>
                 <p className="text-xs text-mgd-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   Ver movimientos →
                 </p>
@@ -394,9 +515,7 @@ export default function BancosPage() {
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  tab === t.id
-                    ? 'border-mgd-600 text-mgd-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                  tab === t.id ? 'border-mgd-600 text-mgd-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {t.label}
@@ -408,7 +527,9 @@ export default function BancosPage() {
 
       {/* Contenido */}
       <div className="p-6">
-        {tab === 'cuentas' && <TabCuentas empresa={empresa} bancos={bancos} reload={cargarBancos} onVerMovimientos={irAMovimientos} />}
+        {tab === 'cuentas' && (
+          <TabCuentas empresa={empresa} bancos={bancos} reload={cargarBancos} onVerMovimientos={irAMovimientos} />
+        )}
         {tab === 'vencimientos' && <TabVencimientos empresa={empresa} />}
       </div>
     </div>

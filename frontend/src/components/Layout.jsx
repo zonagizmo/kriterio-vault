@@ -1,23 +1,23 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
-import { useAuth } from '../contexts/AuthContext.jsx'
+import { useAuth } from '../hooks/useAuth.jsx'
 import BotonApagar from './BotonApagar'
 import { VERSION_DISPLAY } from '../version'
 
 const nav = [
-  { to: '/inicio',       label: 'Inicio',       icon: '🏠' },
-  { to: '/bancos',       label: 'Bancos',       icon: '🏦' },
-  { to: '/usuarios',     label: 'Usuarios NNA', icon: '👦' },
-  { to: '/clientes',     label: 'Clientes',     icon: '👥' },
-  { to: '/proveedores',  label: 'Proveedores',  icon: '🏭' },
-  { to: '/articulos',    label: 'Artículos',    icon: '📦' },
-  { to: '/albaranes',    label: 'Albaranes',    icon: '🚚' },
-  { to: '/facturas',     label: 'Facturas',     icon: '📄' },
-  { to: '/extras',       label: 'Extras',       icon: '🧾' },
+  { to: '/inicio', label: 'Inicio', icon: '🏠' },
+  { to: '/bancos', label: 'Bancos', icon: '🏦' },
+  { to: '/usuarios', label: 'Usuarios NNA', icon: '👦' },
+  { to: '/clientes', label: 'Clientes', icon: '👥' },
+  { to: '/proveedores', label: 'Proveedores', icon: '🏭' },
+  { to: '/articulos', label: 'Artículos', icon: '📦' },
+  { to: '/albaranes', label: 'Albaranes', icon: '🚚' },
+  { to: '/facturas', label: 'Facturas', icon: '📄' },
+  { to: '/extras', label: 'Extras', icon: '🧾' },
   { to: '/contabilidad', label: 'Contabilidad', icon: '📊' },
   { to: '/ingresos-gastos', label: 'Ingresos y Gastos', icon: '💶' },
   { to: '/estadisticas', label: 'Estadísticas', icon: '📈' },
-  { to: '/ajustes',      label: 'Ajustes',      icon: '⚙️' },
+  { to: '/ajustes', label: 'Ajustes', icon: '⚙️' },
 ]
 
 export default function Layout({ children }) {
@@ -47,9 +47,7 @@ export default function Layout({ children }) {
         {/* Empresa activa */}
         <div className="px-3 py-3 border-b border-mgd-800">
           <p className="text-xs text-mgd-100 opacity-60 uppercase tracking-wider mb-1">Empresa</p>
-          <p className="text-white text-sm font-medium truncate leading-snug">
-            {empresa?.nombre ?? ''}
-          </p>
+          <p className="text-white text-sm font-medium truncate leading-snug">{empresa?.nombre ?? ''}</p>
           <p className="text-mgd-100 opacity-50 text-xs font-mono mb-2">{empresa?.codigo ?? ''}</p>
           <button
             onClick={cambiarEmpresa}
@@ -78,25 +76,40 @@ export default function Layout({ children }) {
                 end={to === '/inicio'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    isActive
-                      ? 'bg-mgd-600 text-white font-medium'
-                      : 'text-mgd-100 hover:bg-mgd-800'
+                    isActive ? 'bg-mgd-600 text-white font-medium' : 'text-mgd-100 hover:bg-mgd-800'
                   }`
                 }
               >
                 <span>{icon}</span>
                 <span>{label}</span>
               </NavLink>
-            )
+            ),
           )}
         </nav>
+
+        {/* Link admin: usuarios del sistema */}
+        {user?.rol === 'admin' && (
+          <div className="px-2 pb-1">
+            <NavLink
+              to="/usuarios-sistema"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  isActive ? 'bg-mgd-600 text-white font-medium' : 'text-mgd-100 hover:bg-mgd-800'
+                }`
+              }
+            >
+              <span>🔑</span>
+              <span>Usuarios del sistema</span>
+            </NavLink>
+          </div>
+        )}
 
         <BotonApagar variant="sidebar" />
 
         {/* Usuario logueado */}
         <div className="px-3 py-2 border-t border-mgd-800">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-mgd-100 opacity-60 truncate">{user?.username}</span>
+            <span className="text-xs text-mgd-100 opacity-60 truncate">{user?.nombre || user?.username}</span>
             <button
               onClick={handleLogout}
               className="text-xs text-mgd-100 opacity-50 hover:opacity-100 hover:text-white transition-opacity"
@@ -107,15 +120,11 @@ export default function Layout({ children }) {
           </div>
         </div>
 
-        <div className="px-4 py-2 text-xs text-mgd-100 opacity-30">
-          v{VERSION_DISPLAY}
-        </div>
+        <div className="px-4 py-2 text-xs text-mgd-100 opacity-30">v{VERSION_DISPLAY}</div>
       </aside>
 
       {/* Contenido principal */}
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   )
 }

@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import { getAniosEstadisticas, getEstadisticas } from '../services/estadisticas'
-
-const EUR = (v) =>
-  Number(v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-const EUR0 = (v) =>
-  Number(v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+import { EUR, EUR0 } from '../utils/format'
 
 const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -53,9 +49,12 @@ function GraficoMensual({ meses }) {
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <g key={f}>
             <line
-              x1={PAD.left} x2={W - PAD.right}
-              y1={PAD.top + plotH * (1 - f)} y2={PAD.top + plotH * (1 - f)}
-              stroke="#e5e7eb" strokeWidth="1"
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={PAD.top + plotH * (1 - f)}
+              y2={PAD.top + plotH * (1 - f)}
+              stroke="#e5e7eb"
+              strokeWidth="1"
             />
             <text x={PAD.left - 8} y={PAD.top + plotH * (1 - f) + 3} textAnchor="end" fontSize="10" fill="#9ca3af">
               {EUR0(techo * f)}
@@ -70,14 +69,22 @@ function GraficoMensual({ meses }) {
           return (
             <g key={m.mes}>
               <rect
-                x={cx - barW - 1} y={y(m.ingresos)} width={barW} height={hIng}
-                rx={3} fill={COLOR_INGRESO}
+                x={cx - barW - 1}
+                y={y(m.ingresos)}
+                width={barW}
+                height={hIng}
+                rx={3}
+                fill={COLOR_INGRESO}
                 onMouseEnter={() => setHover({ i, cx, y: y(m.ingresos) })}
                 onMouseLeave={() => setHover(null)}
               />
               <rect
-                x={cx + 1} y={y(m.gastos)} width={barW} height={hGas}
-                rx={3} fill={COLOR_GASTO}
+                x={cx + 1}
+                y={y(m.gastos)}
+                width={barW}
+                height={hGas}
+                rx={3}
+                fill={COLOR_GASTO}
                 onMouseEnter={() => setHover({ i, cx, y: y(m.gastos) })}
                 onMouseLeave={() => setHover(null)}
               />
@@ -160,20 +167,38 @@ function GraficoSaldo({ meses }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top + plotH * (1 - f)} y2={PAD.top + plotH * (1 - f)} stroke="#e5e7eb" strokeWidth="1" />
+            <line
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={PAD.top + plotH * (1 - f)}
+              y2={PAD.top + plotH * (1 - f)}
+              stroke="#e5e7eb"
+              strokeWidth="1"
+            />
             <text x={PAD.left - 8} y={PAD.top + plotH * (1 - f) + 3} textAnchor="end" fontSize="10" fill="#9ca3af">
               {EUR0(min + rango * f)}
             </text>
           </g>
         ))}
 
-        <polyline points={puntos} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline
+          points={puntos}
+          fill="none"
+          stroke="#2563eb"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
 
         {meses.map((m, i) => (
           <g key={m.mes}>
             <circle
-              cx={x(i)} cy={y(m.saldo)} r={hover === i ? 5 : 3.5}
-              fill="#2563eb" stroke="white" strokeWidth="1.5"
+              cx={x(i)}
+              cy={y(m.saldo)}
+              r={hover === i ? 5 : 3.5}
+              fill="#2563eb"
+              stroke="white"
+              strokeWidth="1.5"
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
             />
@@ -207,12 +232,17 @@ function GraficoCategorias({ categorias }) {
           <div key={c.categoria}>
             <div className="flex justify-between text-xs text-gray-600 mb-1">
               <span className="font-medium text-gray-700">{c.categoria}</span>
-              <span>{EUR(c.importe)} · {pct.toFixed(1)}%</span>
+              <span>
+                {EUR(c.importe)} · {pct.toFixed(1)}%
+              </span>
             </div>
             <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
-                style={{ width: `${(c.importe / max) * 100}%`, background: COLORES_CATEGORIA[i % COLORES_CATEGORIA.length] }}
+                style={{
+                  width: `${(c.importe / max) * 100}%`,
+                  background: COLORES_CATEGORIA[i % COLORES_CATEGORIA.length],
+                }}
               />
             </div>
           </div>
@@ -269,13 +299,11 @@ export default function EstadisticasPage() {
           <p className="text-gray-500 text-sm">{empresa.nombre}</p>
         </div>
         {anios.length > 0 && (
-          <select
-            className="input w-32"
-            value={anio ?? ''}
-            onChange={(e) => setAnio(Number(e.target.value))}
-          >
+          <select className="input w-32" value={anio ?? ''} onChange={(e) => setAnio(Number(e.target.value))}>
             {anios.map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>
+                {a}
+              </option>
             ))}
           </select>
         )}

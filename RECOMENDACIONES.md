@@ -48,8 +48,8 @@ Análisis completo del proyecto realizado el 2026-09-18.
 
 | # | Problema | Detalle |
 |---|----------|---------|
-| 20 | Sin TypeScript | Los tipos ayudarían con la complejidad de `modal` (null/string/object). |
-| 21 | Sin ESLint/Prettier | No hay linting ni formateo consistente. |
+| 20 | **Sin TypeScript** | Los tipos ayudarían con la complejidad de `modal` (null/string/object). **Pendiente** — plan de migración incremental creado (9 fases, 62 archivos). Node 14 incompatible con TS 5.x; usar TS 4.9.5. |
+| 21 | **~~Sin ESLint/Prettier~~** | ~~No hay linting ni formateo consistente.~~ **Corregido en v1.11.22**: ESLint 8 (`eslint:recommended` + `react` + `react-hooks` + `prettier`). Prettier con `semi:false`, `singleQuote:true`, `trailingComma:all`. Scripts `lint`, `lint:fix`, `format`, `format:check`. 62 archivos formateados. 9 errores pre-existentes fixeados (hooks rules, empty catches, unescaped entities, unused vars). |
 | 22 | Loading states deficientes | Solo `<p>Cargando...</p>`. Sin skeletons ni spinners. |
 | 23 | Sin dark mode | Tailwind no tiene `darkMode` configurado. |
 | 24 | Paginación sin sync con URL | Un refresh pierde la posición. |

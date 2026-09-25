@@ -1,37 +1,38 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
 import { getExtras, createExtra, updateExtra, deleteExtra, renumerarExtras } from '../services/extras'
 import { getCuentas } from '../services/contabilidad'
-
-const EUR = (v) =>
-  (v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-const hoy = () => new Date().toISOString().slice(0, 10)
-const fmtFecha = (f) => {
-  if (!f) return ''
-  const [y, m, d] = String(f).split('-')
-  return `${d}/${m}/${y}`
-}
+import { EUR, hoy, fmtFecha } from '../utils/format'
 
 const TIPOS = { G: 'Gasto', I: 'Ingreso', M: 'Gasto', A: 'Apertura', R: 'Regulariz.', Z: 'Cierre' }
 
 function badgeVto(fechaVto) {
   if (!fechaVto) return null
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-  const vto = new Date(fechaVto); vto.setHours(0, 0, 0, 0)
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const vto = new Date(fechaVto)
+  vto.setHours(0, 0, 0, 0)
   const dias = Math.round((vto - hoy) / 86400000)
   if (dias < 0)
-    return <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">Vencido</span>
+    return (
+      <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+        Vencido
+      </span>
+    )
   if (dias <= 7)
-    return <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-700">Vence {dias === 0 ? 'hoy' : `en ${dias}d`}</span>
+    return (
+      <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-700">
+        Vence {dias === 0 ? 'hoy' : `en ${dias}d`}
+      </span>
+    )
   return null
 }
 
 const totalExtras = (apuntes, tipo) =>
-  apuntes
-    .filter((a) => (tipo === 'I' ? a.dh === 'H' : a.dh === 'D'))
-    .reduce((s, a) => s + (a.importe ?? 0), 0)
+  apuntes.filter((a) => (tipo === 'I' ? a.dh === 'H' : a.dh === 'D')).reduce((s, a) => s + (a.importe ?? 0), 0)
 
 const mapApunteFromApi = (a) => ({
   cuenta: a.cuenta || '',
@@ -45,11 +46,11 @@ const apunteVacio = (dh = 'D') => ({ cuenta: '', ayuda: '', dh, importe: '', dec
 
 // ── Fila de apunte contable con autocomplete cuenta↔descripción ───────────────
 function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
-  const [resultados, setResultados]     = useState([])
-  const [foco, setFoco]                 = useState(null) // 'cuenta' | 'ayuda'
-  const [highlighted, setHighlighted]   = useState(-1)
-  const trRef    = useRef(null)
-  const listRef  = useRef(null)
+  const [resultados, setResultados] = useState([])
+  const [foco, setFoco] = useState(null) // 'cuenta' | 'ayuda'
+  const [highlighted, setHighlighted] = useState(-1)
+  const trRef = useRef(null)
+  const listRef = useRef(null)
   const timerRef = useRef(null)
 
   useEffect(() => {
@@ -60,13 +61,17 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
 
   const buscar = (q) => {
     clearTimeout(timerRef.current)
-    if (!q || q.length < 1) { setResultados([]); setHighlighted(-1); return }
+    if (!q || q.length < 1) {
+      setResultados([])
+      setHighlighted(-1)
+      return
+    }
     timerRef.current = setTimeout(async () => {
       try {
         const data = await getCuentas({ empresa_id: empresaId, q, limit: 15 })
         setResultados(data.items || [])
         setHighlighted(-1)
-      } catch {}
+      } catch (_) {} // eslint-disable-line no-empty
     }, 200)
   }
 
@@ -80,20 +85,26 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
   const onKeyDown = (e) => {
     if (resultados.length === 0) return
     if (e.key === 'ArrowDown') {
-      e.preventDefault(); setHighlighted((h) => Math.min(h + 1, resultados.length - 1))
+      e.preventDefault()
+      setHighlighted((h) => Math.min(h + 1, resultados.length - 1))
     } else if (e.key === 'ArrowUp') {
-      e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0))
+      e.preventDefault()
+      setHighlighted((h) => Math.max(h - 1, 0))
     } else if (e.key === 'Enter' && highlighted >= 0) {
-      e.preventDefault(); seleccionar(resultados[highlighted])
+      e.preventDefault()
+      seleccionar(resultados[highlighted])
     } else if (e.key === 'Escape') {
-      setResultados([]); setFoco(null)
+      setResultados([])
+      setFoco(null)
     }
   }
 
   const onBlur = () => {
     setTimeout(() => {
       if (!trRef.current?.contains(document.activeElement)) {
-        setResultados([]); setFoco(null); setHighlighted(-1)
+        setResultados([])
+        setFoco(null)
+        setHighlighted(-1)
       }
     }, 150)
   }
@@ -106,7 +117,10 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
       {resultados.map((c, i) => (
         <div
           key={c.id ?? c.cuenta}
-          onMouseDown={(e) => { e.preventDefault(); seleccionar(c) }}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            seleccionar(c)
+          }}
           onMouseEnter={() => setHighlighted(i)}
           className={`px-3 py-2 cursor-pointer flex items-center gap-2 ${
             i === highlighted ? 'bg-mgd-600 text-white' : 'hover:bg-blue-50'
@@ -115,9 +129,7 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
           <span className={`font-mono text-xs shrink-0 ${i === highlighted ? 'text-blue-100' : 'text-gray-400'}`}>
             {c.cuenta}
           </span>
-          <span className={`text-sm truncate ${i === highlighted ? 'text-white' : 'text-gray-800'}`}>
-            {c.texto}
-          </span>
+          <span className={`text-sm truncate ${i === highlighted ? 'text-white' : 'text-gray-800'}`}>{c.texto}</span>
         </div>
       ))}
     </div>
@@ -127,13 +139,18 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
     <tr ref={trRef} className="border-b border-gray-50 last:border-0">
       <td className="py-1.5 pr-2 relative">
         <input
-          ref={(el) => { if (el && focusCuenta) el.focus() }}
+          ref={(el) => {
+            if (el && focusCuenta) el.focus()
+          }}
           className="input text-sm font-mono"
           placeholder="570.0.000"
           value={apunte.cuenta}
           onFocus={() => setFoco('cuenta')}
           onBlur={onBlur}
-          onChange={(e) => { onChange({ ...apunte, cuenta: e.target.value }); buscar(e.target.value) }}
+          onChange={(e) => {
+            onChange({ ...apunte, cuenta: e.target.value })
+            buscar(e.target.value)
+          }}
           onKeyDown={onKeyDown}
         />
         {resultados.length > 0 && foco === 'cuenta' && dropdown}
@@ -145,7 +162,10 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
           value={apunte.ayuda}
           onFocus={() => setFoco('ayuda')}
           onBlur={onBlur}
-          onChange={(e) => { onChange({ ...apunte, ayuda: e.target.value }); buscar(e.target.value) }}
+          onChange={(e) => {
+            onChange({ ...apunte, ayuda: e.target.value })
+            buscar(e.target.value)
+          }}
           onKeyDown={onKeyDown}
         />
         {resultados.length > 0 && foco === 'ayuda' && dropdown}
@@ -171,7 +191,9 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
         />
       </td>
       <td className="py-1.5 pl-1">
-        <button className="text-red-400 hover:text-red-600 px-1" onClick={onRemove}>✕</button>
+        <button className="text-red-400 hover:text-red-600 px-1" onClick={onRemove}>
+          ✕
+        </button>
       </td>
     </tr>
   )
@@ -181,27 +203,28 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
 export default function ExtrasPage() {
   const { empresa } = useEmpresa()
 
-  const [extras, setExtras]   = useState([])
-  const [total, setTotal]     = useState(0)
-  const [skip, setSkip]       = useState(0)
-  const [limit, setLimit]     = useState(50)
-  const [filtroTipo, setFiltroTipo]     = useState('')
-  const [fechaDesde, setFechaDesde]     = useState('')
-  const [fechaHasta, setFechaHasta]     = useState('')
+  const [extras, setExtras] = useState([])
+  const [total, setTotal] = useState(0)
+  const [skip, setSkip] = useState(0)
+  const [limit, setLimit] = useState(50)
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
-  const [q, setQ]                       = useState('')
+  const [q, setQ] = useState('')
 
-  const [modal, setModal]         = useState(null)
-  const [form, setForm]           = useState({})
-  const [apuntes, setApuntes]     = useState([])
-  const [genVto, setGenVto]       = useState(false)
-  const [vtoForm, setVtoForm]     = useState({ importe: '', cuenta: '', fecha: '' })
-  const [error, setError]         = useState('')
+  const [modal, setModal] = useState(null)
+  const [form, setForm] = useState({})
+  const [apuntes, setApuntes] = useState([])
+  const [genVto, setGenVto] = useState(false)
+  const [vtoForm, setVtoForm] = useState({ importe: '', cuenta: '', fecha: '' })
+  const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   const justAddedLine = useRef(false)
   const fechaRef = useRef(null)
   const [nuevoId, setNuevoId] = useState(null)
   const filaRef = useRef(null)
+  const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null, variant: 'danger', title: '' })
 
   const cargar = useCallback(async () => {
     if (!empresa) return
@@ -216,8 +239,12 @@ export default function ExtrasPage() {
     setTotal(data.total)
   }, [empresa, filtroTipo, fechaDesde, fechaHasta, filtroEstado, q, skip, limit])
 
-  useEffect(() => { cargar() }, [cargar])
-  useEffect(() => { setSkip(0) }, [filtroTipo, fechaDesde, fechaHasta, filtroEstado, q])
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+  useEffect(() => {
+    setSkip(0)
+  }, [filtroTipo, fechaDesde, fechaHasta, filtroEstado, q])
 
   useEffect(() => {
     if (!nuevoId || !filaRef.current) return
@@ -227,7 +254,13 @@ export default function ExtrasPage() {
   }, [nuevoId, extras])
 
   const formVacio = () => ({
-    fecha: hoy(), tipo: 'G', texto: '', grupo: '', clave: '', estado: 'P', notas: '',
+    fecha: hoy(),
+    tipo: 'G',
+    texto: '',
+    grupo: '',
+    clave: '',
+    estado: 'P',
+    notas: '',
   })
 
   const abrirNuevo = () => {
@@ -241,9 +274,13 @@ export default function ExtrasPage() {
 
   const abrirEditar = (extra) => {
     setForm({
-      fecha: extra.fecha, tipo: extra.tipo || 'G', texto: extra.texto || '',
-      grupo: extra.grupo || '', clave: extra.clave || '',
-      estado: extra.estado || '', notas: extra.notas || '',
+      fecha: extra.fecha,
+      tipo: extra.tipo || 'G',
+      texto: extra.texto || '',
+      grupo: extra.grupo || '',
+      clave: extra.clave || '',
+      estado: extra.estado || '',
+      notas: extra.notas || '',
     })
     setApuntes(extra.apuntes?.length ? extra.apuntes.map(mapApunteFromApi) : [apunteVacio('D')])
     setGenVto(false)
@@ -270,9 +307,9 @@ export default function ExtrasPage() {
     .filter((a) => (form.tipo === 'I' ? a.dh === 'H' : a.dh === 'D'))
     .reduce((s, a) => s + (parseFloat(a.importe) || 0), 0)
 
-  const totalDebe  = apuntes.reduce((s, a) => a.dh === 'D' ? s + (parseFloat(a.importe) || 0) : s, 0)
-  const totalHaber = apuntes.reduce((s, a) => a.dh === 'H' ? s + (parseFloat(a.importe) || 0) : s, 0)
-  const descuadre  = Math.round((totalDebe - totalHaber) * 100) / 100
+  const totalDebe = apuntes.reduce((s, a) => (a.dh === 'D' ? s + (parseFloat(a.importe) || 0) : s), 0)
+  const totalHaber = apuntes.reduce((s, a) => (a.dh === 'H' ? s + (parseFloat(a.importe) || 0) : s), 0)
+  const descuadre = Math.round((totalDebe - totalHaber) * 100) / 100
 
   const toggleGenVto = (checked) => {
     setGenVto(checked)
@@ -287,9 +324,20 @@ export default function ExtrasPage() {
   }
 
   const guardar = async () => {
-    if (!form.fecha)    { setError('La fecha es obligatoria'); return }
-    if (!form.tipo)     { setError('El tipo es obligatorio'); return }
-    if (descuadre !== 0) { setError(`El asiento no está cuadrado — Debe: ${EUR(totalDebe)} · Haber: ${EUR(totalHaber)} · Diferencia: ${EUR(Math.abs(descuadre))}`); return }
+    if (!form.fecha) {
+      setError('La fecha es obligatoria')
+      return
+    }
+    if (!form.tipo) {
+      setError('El tipo es obligatorio')
+      return
+    }
+    if (descuadre !== 0) {
+      setError(
+        `El asiento no está cuadrado — Debe: ${EUR(totalDebe)} · Haber: ${EUR(totalHaber)} · Diferencia: ${EUR(Math.abs(descuadre))}`,
+      )
+      return
+    }
     setGuardando(true)
     try {
       const apuntesClean = apuntes
@@ -303,10 +351,14 @@ export default function ExtrasPage() {
         }))
 
       const payload = {
-        fecha: form.fecha, tipo: form.tipo,
-        texto: form.texto || null, grupo: form.grupo || null,
-        clave: form.clave || null, estado: form.estado || null,
-        notas: form.notas || null, apuntes: apuntesClean,
+        fecha: form.fecha,
+        tipo: form.tipo,
+        texto: form.texto || null,
+        grupo: form.grupo || null,
+        clave: form.clave || null,
+        estado: form.estado || null,
+        notas: form.notas || null,
+        apuntes: apuntesClean,
         generar_vto: genVto,
         vto_importe: genVto && vtoForm.importe ? parseFloat(vtoForm.importe) : null,
         vto_cuenta: genVto && vtoForm.cuenta ? vtoForm.cuenta : null,
@@ -316,7 +368,7 @@ export default function ExtrasPage() {
       if (modal === 'nuevo') {
         const created = await createExtra({ ...payload, empresa_id: empresa.id })
         setNuevoId(created.id)
-        if (skip !== 0) setSkip(0)  // nuevo extra aparece en pág. 1 (orden DESC)
+        if (skip !== 0) setSkip(0) // nuevo extra aparece en pág. 1 (orden DESC)
         // Reabrir el formulario en blanco para poder seguir dando de alta extras seguidos
         setForm(formVacio())
         setApuntes([apunteVacio('D')])
@@ -337,25 +389,43 @@ export default function ExtrasPage() {
   }
 
   const eliminar = async (extra) => {
-    if (!confirm(`¿Eliminar el extra #${extra.numero}?`)) return
-    try {
-      await deleteExtra(extra.id)
-      cargar()
-    } catch (e) {
-      alert(e.message || 'Error al eliminar')
-    }
+    setConfirmState({
+      open: true,
+      title: 'Eliminar extra',
+      msg: `¿Eliminar el extra #${extra.numero}?`,
+      confirmText: 'Eliminar',
+      variant: 'danger',
+      action: async () => {
+        try {
+          await deleteExtra(extra.id)
+          cargar()
+        } catch (e) {
+          alert(e.message || 'Error al eliminar')
+        }
+      },
+    })
   }
 
   const renumerar = async (desdeId = null) => {
     const msg = desdeId
       ? '¿Renumerar extras desde este en adelante (mismo año)?'
       : '¿Renumerar todos los extras por orden de fecha?'
-    if (!confirm(msg)) return
-    try {
-      const res = await renumerarExtras(empresa.id, desdeId)
-      alert(`${res.renumeradas} extras renumerados correctamente.`)
-      cargar()
-    } catch (e) { alert(e.message) }
+    setConfirmState({
+      open: true,
+      title: 'Renumerar extras',
+      msg,
+      confirmText: 'Renumerar',
+      variant: 'warning',
+      action: async () => {
+        try {
+          const res = await renumerarExtras(empresa.id, desdeId)
+          alert(`${res.renumeradas} extras renumerados correctamente.`)
+          cargar()
+        } catch (e) {
+          alert(e.message)
+        }
+      },
+    })
   }
 
   if (!empresa) {
@@ -375,18 +445,31 @@ export default function ExtrasPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="label">Concepto</label>
-            <input type="search" placeholder="Buscar concepto..."
-              value={q} onChange={(e) => setQ(e.target.value)} className="input w-44" />
+            <input
+              type="search"
+              placeholder="Buscar concepto..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="input w-44"
+            />
           </div>
           <div>
             <label className="label">Desde</label>
-            <input type="date" value={fechaDesde}
-              onChange={(e) => setFechaDesde(e.target.value)} className="input w-38" />
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="input w-38"
+            />
           </div>
           <div>
             <label className="label">Hasta</label>
-            <input type="date" value={fechaHasta}
-              onChange={(e) => setFechaHasta(e.target.value)} className="input w-38" />
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="input w-38"
+            />
           </div>
           <div>
             <label className="label">Tipo</label>
@@ -407,93 +490,150 @@ export default function ExtrasPage() {
           {(q || fechaDesde || fechaHasta || filtroTipo || filtroEstado) && (
             <button
               className="btn btn-secondary text-sm"
-              onClick={() => { setQ(''); setFechaDesde(''); setFechaHasta(''); setFiltroTipo(''); setFiltroEstado('') }}
+              onClick={() => {
+                setQ('')
+                setFechaDesde('')
+                setFechaHasta('')
+                setFiltroTipo('')
+                setFiltroEstado('')
+              }}
             >
               Borrar filtros
             </button>
           )}
-          <span className="text-sm text-gray-500 ml-auto self-center">{total} extra{total !== 1 ? 's' : ''}</span>
-          <button onClick={() => renumerar()} className="btn btn-secondary text-sm">Renumerar</button>
-          <button className="btn btn-primary" onClick={abrirNuevo}>+ Nuevo extra</button>
+          <span className="text-sm text-gray-500 ml-auto self-center">
+            {total} extra{total !== 1 ? 's' : ''}
+          </span>
+          <button onClick={() => renumerar()} className="btn btn-secondary text-sm">
+            Renumerar
+          </button>
+          <button className="btn btn-primary" onClick={abrirNuevo}>
+            + Nuevo extra
+          </button>
         </div>
       </div>
 
       {/* Contenido */}
       <div className="p-6">
-      <div className="card">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nº</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tipo</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Concepto</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Grupo</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {extras.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Sin extras registrados</td></tr>
-            )}
-            {extras.map((e) => {
-              const tot = totalExtras(e.apuntes, e.tipo)
-              return (
-                <tr
-                  key={e.id}
-                  ref={e.id === nuevoId ? filaRef : null}
-                  className={`hover:bg-gray-50 transition-colors ${e.id === nuevoId ? 'bg-mgd-50 outline outline-1 outline-mgd-300' : ''}`}
-                >
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
-                    {(e.cnumero ?? e.numero)}/{(e.fecha || '').slice(0, 4)}
-                    <button onClick={() => renumerar(e.id)} className="ml-1 text-gray-300 hover:text-gray-500 text-xs" title="Renumerar desde aquí">↺</button>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{fmtFecha(e.fecha)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      e.tipo === 'I' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>{TIPOS[e.tipo] ?? e.tipo}</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-900">{e.texto}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{e.grupo}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${e.tipo === 'I' ? 'text-green-700' : 'text-red-600'}`}>
-                    {EUR(e.tipo === 'I' ? tot : -tot)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {(() => {
-                      const label = e.estado === 'C' ? (e.tipo === 'I' ? 'Cobrado' : 'Pagado') : 'Pendiente'
-                      const cls = e.estado === 'C' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                      return (
-                        <>
-                          <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
-                          {e.estado === 'P' && badgeVto(e.fecha_vto)}
-                          {e.pago_info && (
-                            <div
-                              className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px] mx-auto"
-                              title={`${e.pago_info.banco_nombre}${e.pago_info.fecha ? ' — ' + fmtFecha(e.pago_info.fecha) : ''}`}
-                            >
-                              {e.pago_info.banco_nombre}
-                            </div>
-                          )}
-                        </>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(e)}>Editar</button>
-                    <button className="text-red-500 hover:text-red-700 text-xs font-medium" onClick={() => eliminar(e)}>Eliminar</button>
+        <div className="card">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nº</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Fecha
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Tipo
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Concepto
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Grupo
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Total
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Estado
+                </th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {extras.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                    Sin extras registrados
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+              )}
+              {extras.map((e) => {
+                const tot = totalExtras(e.apuntes, e.tipo)
+                return (
+                  <tr
+                    key={e.id}
+                    ref={e.id === nuevoId ? filaRef : null}
+                    className={`hover:bg-gray-50 transition-colors ${e.id === nuevoId ? 'bg-mgd-50 outline outline-1 outline-mgd-300' : ''}`}
+                  >
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
+                      {e.cnumero ?? e.numero}/{(e.fecha || '').slice(0, 4)}
+                      <button
+                        onClick={() => renumerar(e.id)}
+                        className="ml-1 text-gray-300 hover:text-gray-500 text-xs"
+                        title="Renumerar desde aquí"
+                      >
+                        ↺
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{fmtFecha(e.fecha)}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          e.tipo === 'I' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {TIPOS[e.tipo] ?? e.tipo}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-900">{e.texto}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{e.grupo}</td>
+                    <td
+                      className={`px-4 py-3 text-right font-medium ${e.tipo === 'I' ? 'text-green-700' : 'text-red-600'}`}
+                    >
+                      {EUR(e.tipo === 'I' ? tot : -tot)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {(() => {
+                        const label = e.estado === 'C' ? (e.tipo === 'I' ? 'Cobrado' : 'Pagado') : 'Pendiente'
+                        const cls = e.estado === 'C' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        return (
+                          <>
+                            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${cls}`}>
+                              {label}
+                            </span>
+                            {e.estado === 'P' && badgeVto(e.fecha_vto)}
+                            {e.pago_info && (
+                              <div
+                                className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px] mx-auto"
+                                title={`${e.pago_info.banco_nombre}${e.pago_info.fecha ? ' — ' + fmtFecha(e.pago_info.fecha) : ''}`}
+                              >
+                                {e.pago_info.banco_nombre}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(e)}>
+                        Editar
+                      </button>
+                      <button
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                        onClick={() => eliminar(e)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      <Paginacion total={total} skip={skip} limit={limit} onCambiar={setSkip}
-        onLimitChange={(n) => { setLimit(n); setSkip(0) }} />
+        <Paginacion
+          total={total}
+          skip={skip}
+          limit={limit}
+          onCambiar={setSkip}
+          onLimitChange={(n) => {
+            setLimit(n)
+            setSkip(0)
+          }}
+        />
       </div>
 
       {modal && (
@@ -525,7 +665,11 @@ export default function ExtrasPage() {
             </div>
             <div>
               <label className="label">Estado</label>
-              <select className="input" value={form.estado || 'P'} onChange={(e) => setForm({ ...form, estado: e.target.value })}>
+              <select
+                className="input"
+                value={form.estado || 'P'}
+                onChange={(e) => setForm({ ...form, estado: e.target.value })}
+              >
                 <option value="P">Pendiente</option>
                 <option value="C">Cobrado / Pagado</option>
               </select>
@@ -541,15 +685,27 @@ export default function ExtrasPage() {
             )}
             <div className="col-span-2">
               <label className="label">Concepto</label>
-              <input className="input" value={form.texto} onChange={(e) => setForm({ ...form, texto: e.target.value })} />
+              <input
+                className="input"
+                value={form.texto}
+                onChange={(e) => setForm({ ...form, texto: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Grupo</label>
-              <input className="input" value={form.grupo} onChange={(e) => setForm({ ...form, grupo: e.target.value })} />
+              <input
+                className="input"
+                value={form.grupo}
+                onChange={(e) => setForm({ ...form, grupo: e.target.value })}
+              />
             </div>
             <div className="col-span-3">
               <label className="label">Notas</label>
-              <input className="input" value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} />
+              <input
+                className="input"
+                value={form.notas}
+                onChange={(e) => setForm({ ...form, notas: e.target.value })}
+              />
             </div>
           </div>
 
@@ -562,7 +718,9 @@ export default function ExtrasPage() {
                   Total: {EUR(totalApuntes)}
                 </span>
               </div>
-              <button className="btn btn-secondary text-xs" onClick={addApunte}>+ Añadir línea</button>
+              <button className="btn btn-secondary text-xs" onClick={addApunte}>
+                + Añadir línea
+              </button>
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -598,7 +756,10 @@ export default function ExtrasPage() {
           {descuadre !== 0 && (
             <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <span className="text-base leading-none">⚠</span>
-              <span>Asiento descuadrado — Debe: <strong>{EUR(totalDebe)}</strong> · Haber: <strong>{EUR(totalHaber)}</strong> · Diferencia: <strong>{EUR(Math.abs(descuadre))}</strong></span>
+              <span>
+                Asiento descuadrado — Debe: <strong>{EUR(totalDebe)}</strong> · Haber:{' '}
+                <strong>{EUR(totalHaber)}</strong> · Diferencia: <strong>{EUR(Math.abs(descuadre))}</strong>
+              </span>
             </div>
           )}
 
@@ -613,23 +774,35 @@ export default function ExtrasPage() {
                 <div className="grid grid-cols-3 gap-4 pl-6">
                   <div>
                     <label className="label">Importe pendiente</label>
-                    <input type="number" step="0.01" className="input"
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input"
                       value={vtoForm.importe}
                       onChange={(e) => setVtoForm({ ...vtoForm, importe: e.target.value })}
                       onBlur={(e) => {
                         const v = parseFloat(e.target.value)
                         if (!isNaN(v)) setVtoForm((f) => ({ ...f, importe: v.toFixed(2) }))
-                      }} />
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="label">Cuenta contrapartida</label>
-                    <input className="input font-mono" placeholder="570.0.000"
-                      value={vtoForm.cuenta} onChange={(e) => setVtoForm({ ...vtoForm, cuenta: e.target.value })} />
+                    <input
+                      className="input font-mono"
+                      placeholder="570.0.000"
+                      value={vtoForm.cuenta}
+                      onChange={(e) => setVtoForm({ ...vtoForm, cuenta: e.target.value })}
+                    />
                   </div>
                   <div>
                     <label className="label">Fecha de vencimiento</label>
-                    <input type="date" className="input"
-                      value={vtoForm.fecha} onChange={(e) => setVtoForm({ ...vtoForm, fecha: e.target.value })} />
+                    <input
+                      type="date"
+                      className="input"
+                      value={vtoForm.fecha}
+                      onChange={(e) => setVtoForm({ ...vtoForm, fecha: e.target.value })}
+                    />
                   </div>
                 </div>
               )}
@@ -637,13 +810,28 @@ export default function ExtrasPage() {
           )}
 
           <div className="flex justify-end gap-3 mt-6">
-            <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+            <button className="btn btn-secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
             <button className="btn btn-primary" disabled={guardando} onClick={guardar}>
               {guardando ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.msg}
+        confirmText={confirmState.confirmText}
+        variant={confirmState.variant}
+        onConfirm={async () => {
+          await confirmState.action()
+          setConfirmState({ open: false, msg: '', action: null, variant: 'danger', title: '' })
+        }}
+        onCancel={() => setConfirmState({ open: false, msg: '', action: null, variant: 'danger', title: '' })}
+      />
     </div>
   )
 }

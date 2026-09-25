@@ -33,9 +33,7 @@ export default function Paginacion({ total, skip, limit, onCambiar, onLimitChang
                   key={p}
                   onClick={() => ir(p)}
                   className={`px-3 py-1 rounded border text-sm ${
-                    p === pagActual
-                      ? 'bg-mgd-600 text-white border-mgd-600'
-                      : 'hover:bg-gray-50'
+                    p === pagActual ? 'bg-mgd-600 text-white border-mgd-600' : 'hover:bg-gray-50'
                   }`}
                 >
                   {p + 1}
@@ -58,7 +56,9 @@ export default function Paginacion({ total, skip, limit, onCambiar, onLimitChang
             className="text-sm border rounded px-2 py-1 text-gray-600 bg-white cursor-pointer"
           >
             {OPCIONES.map((o) => (
-              <option key={o} value={o}>{o >= 9999 ? 'Todo' : o}</option>
+              <option key={o} value={o}>
+                {o >= 9999 ? 'Todo' : o}
+              </option>
             ))}
           </select>
         )}

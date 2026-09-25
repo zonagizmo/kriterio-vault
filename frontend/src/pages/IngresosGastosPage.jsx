@@ -1,24 +1,18 @@
 import { useState } from 'react'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import {
-  getIngresosGastosPeriodo, getListadoIngresos, getListadoGastos,
-  exportarListadoIngresos, exportarListadoGastos,
+  getIngresosGastosPeriodo,
+  getListadoIngresos,
+  getListadoGastos,
+  exportarListadoIngresos,
+  exportarListadoGastos,
 } from '../services/estadisticas'
-
-const EUR = (v) =>
-  Number(v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-
-const fmtFecha = (f) => {
-  if (!f) return ''
-  const [y, m, d] = String(f).split('-')
-  return `${d}/${m}/${y}`
-}
+import { EUR, hoy, fmtFecha } from '../utils/format'
 
 const COLORES_INGRESO = ['#2a78d6', '#1baf7a']
 const COLORES_GASTO = ['#e34948', '#eb6834', '#eda100', '#4a3aa7']
 
 const anioActual = new Date().getFullYear()
-const hoy = () => new Date().toISOString().slice(0, 10)
 
 function Desglose({ categorias, colores }) {
   const conDatos = categorias.filter((c) => c.importe !== 0)
@@ -37,7 +31,9 @@ function Desglose({ categorias, colores }) {
           <div key={c.categoria}>
             <div className="flex justify-between text-xs text-gray-600 mb-1">
               <span className="font-medium text-gray-700">{c.categoria}</span>
-              <span>{EUR(c.importe)} · {pct.toFixed(1)}%</span>
+              <span>
+                {EUR(c.importe)} · {pct.toFixed(1)}%
+              </span>
             </div>
             <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
               <div
@@ -107,7 +103,9 @@ function TablaListado({ items, colorImporte, variante = 'ingresos' }) {
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-gray-300">
-            <td colSpan={esGastos ? 4 : 3} className="py-2 pr-3 text-right font-semibold text-gray-700">Total</td>
+            <td colSpan={esGastos ? 4 : 3} className="py-2 pr-3 text-right font-semibold text-gray-700">
+              Total
+            </td>
             <td className={`py-2 text-right font-bold ${colorImporte}`}>{EUR(total)}</td>
           </tr>
         </tfoot>
@@ -121,11 +119,11 @@ export default function IngresosGastosPage() {
   const [tab, setTab] = useState('resumen')
   const [fechaDesde, setFechaDesde] = useState(`${anioActual}-01-01`)
   const [fechaHasta, setFechaHasta] = useState(hoy())
-  const [data, setData]         = useState(null)
+  const [data, setData] = useState(null)
   const [ingresos, setIngresos] = useState([])
-  const [gastos, setGastos]     = useState([])
+  const [gastos, setGastos] = useState([])
   const [cargando, setCargando] = useState(false)
-  const [error, setError]       = useState('')
+  const [error, setError] = useState('')
 
   const consultar = async () => {
     if (!fechaDesde || !fechaHasta) return
@@ -172,13 +170,11 @@ export default function IngresosGastosPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="label">Desde</label>
-            <input type="date" className="input" value={fechaDesde}
-              onChange={(e) => setFechaDesde(e.target.value)} />
+            <input type="date" className="input" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} />
           </div>
           <div>
             <label className="label">Hasta</label>
-            <input type="date" className="input" value={fechaHasta}
-              onChange={(e) => setFechaHasta(e.target.value)} />
+            <input type="date" className="input" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
           <button className="btn btn-primary self-end" onClick={consultar} disabled={cargando}>
             {cargando ? 'Calculando…' : 'Calcular'}
@@ -218,7 +214,9 @@ export default function IngresosGastosPage() {
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Gastos</p>
                     <p className="text-2xl font-bold text-red-600">{EUR(data.gastos_total)}</p>
                   </div>
-                  <div className={`card px-5 py-4 border-2 ${data.resultado >= 0 ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+                  <div
+                    className={`card px-5 py-4 border-2 ${data.resultado >= 0 ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}
+                  >
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
                       {data.resultado >= 0 ? 'Resultado (beneficio)' : 'Resultado (pérdida)'}
                     </p>
@@ -243,8 +241,10 @@ export default function IngresosGastosPage() {
               <Panel
                 titulo={`Listado de ingresos (${ingresos.length})`}
                 accion={
-                  <button className="btn btn-secondary text-xs"
-                    onClick={() => exportarListadoIngresos(empresa.id, fechaDesde, fechaHasta)}>
+                  <button
+                    className="btn btn-secondary text-xs"
+                    onClick={() => exportarListadoIngresos(empresa.id, fechaDesde, fechaHasta)}
+                  >
                     Exportar a Excel
                   </button>
                 }
@@ -257,8 +257,10 @@ export default function IngresosGastosPage() {
               <Panel
                 titulo={`Listado de gastos (${gastos.length})`}
                 accion={
-                  <button className="btn btn-secondary text-xs"
-                    onClick={() => exportarListadoGastos(empresa.id, fechaDesde, fechaHasta)}>
+                  <button
+                    className="btn btn-secondary text-xs"
+                    onClick={() => exportarListadoGastos(empresa.id, fechaDesde, fechaHasta)}
+                  >
                     Exportar a Excel
                   </button>
                 }
@@ -270,7 +272,7 @@ export default function IngresosGastosPage() {
         )}
 
         {!data && !cargando && !error && (
-          <p className="text-sm text-gray-400">Elige un rango de fechas y pulsa "Calcular".</p>
+          <p className="text-sm text-gray-400">Elige un rango de fechas y pulsa &quot;Calcular&quot;.</p>
         )}
       </div>
     </div>

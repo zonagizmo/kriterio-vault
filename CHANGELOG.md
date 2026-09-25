@@ -5,6 +5,23 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.11.22] — 2026-09-25 — Punto 21: ESLint + Prettier
+
+### Añadido
+- **`frontend/.eslintrc.json`** — ESLint 8 con reglas: `eslint:recommended`, `plugin:react/recommended`, `plugin:react-hooks/recommended`, `prettier`. Deshabilitado `react/prop-types`. Habilitado `eqeqeq: smart`, `no-unused-vars` (warn), `no-console` (warn, allow error).
+- **`frontend/.prettierrc`** — Configuración que coincide con el estilo existente: `semi: false`, `singleQuote: true`, `trailingComma: "all"`, `tabWidth: 2`, `printWidth: 120`.
+- **`frontend/.prettierignore`** — Excluye `dist/`, `node_modules/`, `public/`.
+- **`package.json`** — Scripts añadidos: `lint`, `lint:fix`, `format`, `format:check`.
+- **Dependencias**: `eslint@8.57.1`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-config-prettier`, `prettier@3.9.9`.
+
+### Corregido (pre-existente, detectado por ESLint)
+- **`CrudPage.jsx`** — `useCrud` se llamaba condicionalmente (violaba rules-of-hooks). Ahora se llama siempre; `modal` se fuerza a `null` cuando se usan `items` externos.
+- **`ExtrasPage.jsx`**, **`MovimientosBancoPage.jsx`** — Empty catch blocks con `eslint-disable-line`.
+- **`IngresosGastosPage.jsx`**, **`MovimientosBancoPage.jsx`**, **`TabDiagnostico.jsx`** — Comillas dobles sin escapar en JSX → `&quot;`.
+- **`LineasDocumento.jsx`**, **`ArticulosPage.jsx`**, **`BancosPage.jsx`**, **`FacturasPage.jsx`**, **`TabDiario.jsx`**, **`TabMayor.jsx`**, **`CrudPage.jsx`** — Unused vars/imports eliminados o prefijados con `_`.
+
+---
+
 ## [1.11.21] — 2026-09-24 — Punto 5: SQL injection fix + refactor raw SQL → ORM
 
 ### Corregido

@@ -24,8 +24,16 @@ export function EmpresaProvider({ children }) {
     }
   }, [empresa])
 
+  function addEmpresa(emp) {
+    setEmpresas((prev) => [...prev, emp])
+  }
+
+  function removeEmpresa(id) {
+    setEmpresas((prev) => prev.filter((e) => e.id !== id))
+  }
+
   return (
-    <EmpresaCtx.Provider value={{ empresa, empresas, setEmpresa }}>
+    <EmpresaCtx.Provider value={{ empresa, empresas, loading: false, setEmpresa, addEmpresa, removeEmpresa }}>
       {children}
     </EmpresaCtx.Provider>
   )

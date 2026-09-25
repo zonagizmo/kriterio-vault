@@ -2,12 +2,22 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import { getDashboard } from '../services/dashboard'
+import { EUR } from '../utils/format'
 
-const EUR = (v) =>
-  Number(v ?? 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
-
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MESES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
 
 function mesAnterior() {
   const hoy = new Date()
@@ -58,11 +68,7 @@ export default function InicioPage() {
   }, [empresa])
 
   if (!empresa) {
-    return (
-      <div className="p-8 text-center text-gray-400">
-        Selecciona una empresa para ver el panel.
-      </div>
-    )
+    return <div className="p-8 text-center text-gray-400">Selecciona una empresa para ver el panel.</div>
   }
 
   return (
@@ -101,7 +107,9 @@ export default function InicioPage() {
 
             {/* ── Facturación ────────────────────────────────── */}
             <section>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Facturación pendiente</h2>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                Facturación pendiente
+              </h2>
               <div className="grid grid-cols-2 gap-3">
                 <Tarjeta
                   titulo="Por cobrar"
@@ -157,7 +165,9 @@ export default function InicioPage() {
                   >
                     <span className="text-lg font-bold">{data.vencimientos_vencidos}</span>
                     <span className="text-sm">
-                      {data.vencimientos_vencidos === 1 ? 'vencimiento vencido sin pagar' : 'vencimientos vencidos sin pagar'}
+                      {data.vencimientos_vencidos === 1
+                        ? 'vencimiento vencido sin pagar'
+                        : 'vencimientos vencidos sin pagar'}
                     </span>
                     <span className="ml-auto text-xs opacity-70">Ver →</span>
                   </div>
@@ -178,20 +188,18 @@ export default function InicioPage() {
                           const dias = Math.round((new Date(v.fecha) - new Date()) / 86400000)
                           return (
                             <tr key={v.numero} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 text-gray-700">
-                                {TIPO_VTO[v.tipo] || v.tipo}
-                              </td>
+                              <td className="px-4 py-2 text-gray-700">{TIPO_VTO[v.tipo] || v.tipo}</td>
                               <td className="px-4 py-2">
-                                <span className={`text-sm ${dias <= 2 ? 'text-orange-600 font-semibold' : 'text-gray-600'}`}>
+                                <span
+                                  className={`text-sm ${dias <= 2 ? 'text-orange-600 font-semibold' : 'text-gray-600'}`}
+                                >
                                   {new Date(v.fecha).toLocaleDateString('es-ES')}
                                 </span>
                                 {dias === 0 && <span className="ml-2 text-xs text-orange-500">hoy</span>}
                                 {dias === 1 && <span className="ml-2 text-xs text-orange-500">mañana</span>}
                                 {dias > 1 && <span className="ml-2 text-xs text-gray-400">en {dias}d</span>}
                               </td>
-                              <td className="px-4 py-2 text-right font-semibold text-gray-800">
-                                {EUR(v.pendiente)}
-                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-gray-800">{EUR(v.pendiente)}</td>
                             </tr>
                           )
                         })}

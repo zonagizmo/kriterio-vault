@@ -13,11 +13,11 @@ export default function AutocompleteCuenta({
   tabIndex,
 }) {
   const [sugerencias, setSugerencias] = useState([])
-  const [abierto, setAbierto]         = useState(false)
+  const [abierto, setAbierto] = useState(false)
   const [highlighted, setHighlighted] = useState(-1)
-  const ref     = useRef(null)
+  const ref = useRef(null)
   const listRef = useRef(null)
-  const timer   = useRef(null)
+  const timer = useRef(null)
 
   useEffect(() => {
     clearTimeout(timer.current)
@@ -98,7 +98,10 @@ export default function AutocompleteCuenta({
         placeholder={placeholder}
         value={value}
         autoComplete="off"
-        onChange={(e) => { onChange(e.target.value); setHighlighted(-1) }}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setHighlighted(-1)
+        }}
         onKeyDown={handleKeyDown}
         onBlur={onBlur}
       />
@@ -116,7 +119,9 @@ export default function AutocompleteCuenta({
               onMouseDown={() => seleccionar(c)}
               onMouseEnter={() => setHighlighted(i)}
             >
-              <span className={`font-mono text-sm font-semibold shrink-0 w-24 ${i === highlighted ? 'text-white' : 'text-gray-800'}`}>
+              <span
+                className={`font-mono text-sm font-semibold shrink-0 w-24 ${i === highlighted ? 'text-white' : 'text-gray-800'}`}
+              >
                 {c.cuenta}
               </span>
               <span className={`text-sm truncate ${i === highlighted ? 'text-blue-100' : 'text-gray-500'}`}>

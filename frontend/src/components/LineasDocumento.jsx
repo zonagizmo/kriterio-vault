@@ -5,15 +5,22 @@ import { useEmpresa } from '../hooks/useEmpresa.jsx'
 const EUR = (v) => Number(v || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 
 const LINEA_VACIA = {
-  articulo: null, texto: 'Total', cantidad: 1, precio: 0,
-  dcto1: 0, dcto2: 0, dcto3: 0, tiva: null, importe: 0,
+  articulo: null,
+  texto: 'Total',
+  cantidad: 1,
+  precio: 0,
+  dcto1: 0,
+  dcto2: 0,
+  dcto3: 0,
+  tiva: null,
+  importe: 0,
 }
 
 function calcImporte(l) {
   let v = (l.cantidad || 1) * (l.precio || 0)
-  if (l.dcto1) v *= (1 - l.dcto1 / 100)
-  if (l.dcto2) v *= (1 - l.dcto2 / 100)
-  if (l.dcto3) v *= (1 - l.dcto3 / 100)
+  if (l.dcto1) v *= 1 - l.dcto1 / 100
+  if (l.dcto2) v *= 1 - l.dcto2 / 100
+  if (l.dcto3) v *= 1 - l.dcto3 / 100
   return Math.round(v * 100) / 100
 }
 
@@ -34,11 +41,14 @@ function onDecimalKeyDown(e) {
 function BuscadorArticulo({ empresaId, onSeleccionar }) {
   const [q, setQ] = useState('')
   const [resultados, setResultados] = useState([])
-  const [buscando, setBuscando] = useState(false)
+  const [_buscando, setBuscando] = useState(false)
 
   const buscar = async (texto) => {
     setQ(texto)
-    if (texto.length < 2) { setResultados([]); return }
+    if (texto.length < 2) {
+      setResultados([])
+      return
+    }
     setBuscando(true)
     try {
       const data = await getArticulos(empresaId, { q: texto, limit: 10 })
@@ -63,7 +73,10 @@ function BuscadorArticulo({ empresaId, onSeleccionar }) {
             <li
               key={a.id}
               className="px-3 py-2 hover:bg-mgd-50 cursor-pointer"
-              onClick={() => { onSeleccionar(a); setResultados([]) }}
+              onClick={() => {
+                onSeleccionar(a)
+                setResultados([])
+              }}
             >
               <span className="font-medium">{a.nombre}</span>
               {a.codigo && <span className="text-gray-400 text-xs ml-2">{a.codigo}</span>}
@@ -144,15 +157,9 @@ export default function LineasDocumento({ lineas, onChange, tabIndexAnadir }) {
               <tr key={idx} className="group">
                 <td className="px-3 py-2">
                   {buscandoIdx === idx ? (
-                    <BuscadorArticulo
-                      empresaId={empresa?.id}
-                      onSeleccionar={(a) => seleccionarArticulo(idx, a)}
-                    />
+                    <BuscadorArticulo empresaId={empresa?.id} onSeleccionar={(a) => seleccionarArticulo(idx, a)} />
                   ) : (
-                    <div
-                      className="flex items-center gap-1 cursor-pointer"
-                      onClick={() => setBuscandoIdx(idx)}
-                    >
+                    <div className="flex items-center gap-1 cursor-pointer" onClick={() => setBuscandoIdx(idx)}>
                       <input
                         ref={(el) => {
                           if (el && justAdded.current && idx === lineas.length - 1) {
@@ -180,7 +187,9 @@ export default function LineasDocumento({ lineas, onChange, tabIndexAnadir }) {
                 </td>
                 <td className="px-3 py-2">
                   <input
-                    type="number" step="0.001" min="0"
+                    type="number"
+                    step="0.001"
+                    min="0"
                     className="input text-xs text-right"
                     value={linea.cantidad}
                     onChange={(e) => actualizar(idx, 'cantidad', parseFloat(e.target.value) || 0)}
@@ -205,15 +214,16 @@ export default function LineasDocumento({ lineas, onChange, tabIndexAnadir }) {
                 </td>
                 <td className="px-3 py-2">
                   <input
-                    type="number" step="0.01" min="0" max="100"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
                     className="input text-xs text-right"
                     value={linea.dcto1}
                     onChange={(e) => actualizar(idx, 'dcto1', parseFloat(e.target.value) || 0)}
                   />
                 </td>
-                <td className="px-3 py-2 text-right font-mono text-xs font-medium">
-                  {EUR(linea.importe)}
-                </td>
+                <td className="px-3 py-2 text-right font-mono text-xs font-medium">{EUR(linea.importe)}</td>
                 <td className="px-3 py-2">
                   <button
                     type="button"
@@ -230,12 +240,7 @@ export default function LineasDocumento({ lineas, onChange, tabIndexAnadir }) {
       </div>
 
       <div className="flex items-center justify-between mt-3">
-        <button
-          type="button"
-          tabIndex={tabIndexAnadir}
-          onClick={agregarLinea}
-          className="btn-secondary text-xs"
-        >
+        <button type="button" tabIndex={tabIndexAnadir} onClick={agregarLinea} className="btn-secondary text-xs">
           + Añadir línea
         </button>
         <div className="text-right">

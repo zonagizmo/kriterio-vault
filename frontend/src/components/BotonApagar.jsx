@@ -18,10 +18,7 @@ export default function BotonApagar({ variant = 'sidebar' }) {
 
   if (apagando) {
     return (
-      <div className={variant === 'sidebar'
-        ? 'px-4 py-3 text-xs text-mgd-100 opacity-60'
-        : 'text-sm text-gray-500'
-      }>
+      <div className={variant === 'sidebar' ? 'px-4 py-3 text-xs text-mgd-100 opacity-60' : 'text-sm text-gray-500'}>
         Servidor detenido. Puedes cerrar esta ventana.
       </div>
     )
@@ -29,14 +26,8 @@ export default function BotonApagar({ variant = 'sidebar' }) {
 
   if (confirmando) {
     return (
-      <div className={variant === 'sidebar'
-        ? 'px-3 py-3 border-t border-mgd-800'
-        : 'flex flex-col items-center gap-2'
-      }>
-        <p className={variant === 'sidebar'
-          ? 'text-xs text-mgd-100 mb-2 opacity-80'
-          : 'text-sm text-gray-600 mb-1'
-        }>
+      <div className={variant === 'sidebar' ? 'px-3 py-3 border-t border-mgd-800' : 'flex flex-col items-center gap-2'}>
+        <p className={variant === 'sidebar' ? 'text-xs text-mgd-100 mb-2 opacity-80' : 'text-sm text-gray-600 mb-1'}>
           ¿Cerrar la aplicación?
         </p>
         <div className="flex gap-2">
