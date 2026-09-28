@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, tuple_
+from decimal import Decimal
 from app.models.facturacion import FacturaEmitida, FacturaRecibida, Apunte
 from app.models.clientes_proveedores import Vencimiento
 from app.schemas.facturacion import (
@@ -21,16 +22,16 @@ TALBARAN_FREC = 'C'
 class FacturaDuplicadaError(Exception):
     """Ya existe otra factura recibida del mismo proveedor con el mismo nº de
     factura de proveedor. Se usa para avisar al usuario, no bloquea por sí sola."""
-    def __init__(self, factura: FacturaRecibida, total_nuevo: float):
+    def __init__(self, factura: FacturaRecibida, total_nuevo):
         self.factura = factura
         self.total_nuevo = total_nuevo
 
 
-def _total_previsto(lineas_data) -> float:
-    return round(sum(
+def _total_previsto(lineas_data):
+    return sum(
         calcular_importe_linea(l.cantidad or 1, l.precio or 0, l.dcto1 or 0, l.dcto2 or 0, l.dcto3 or 0)
         for l in lineas_data
-    ), 2)
+    )
 
 
 def _buscar_duplicado_rec(db: Session, empresa_id: int, proveedor: int,
@@ -50,6 +51,69 @@ def _buscar_duplicado_rec(db: Session, empresa_id: int, proveedor: int,
     if excluir_id:
         query = query.filter(FacturaRecibida.id != excluir_id)
     return query.first()
+
+
+def _batch_cargar_info(db, empresa_id, tipo, numeros):
+    """Carga pago_info y fecha_vto para múltiples facturas en 4 queries en vez de ~5N."""
+    from app.models.bancos import Banco, MovBanco, Pago
+
+    if not numeros:
+        return {}, {}
+
+    vtos = db.query(Vencimiento).filter(
+        Vencimiento.empresa_id == empresa_id,
+        Vencimiento.tipo == tipo,
+        Vencimiento.tpnumero.in_(numeros),
+    ).all()
+
+    vto_por_fac = {}
+    for v in vtos:
+        vto_por_fac.setdefault(v.tpnumero, []).append(v)
+
+    vto_nums = [v.numero for v in vtos]
+    pagos = db.query(Pago).filter(
+        Pago.empresa_id == empresa_id,
+        Pago.vto.in_(vto_nums),
+    ).all() if vto_nums else []
+
+    pago_por_vto = {p.vto: p for p in pagos}
+
+    banco_nums = {p.banco for p in pagos}
+    bancos = db.query(Banco).filter(
+        Banco.empresa_id == empresa_id,
+        Banco.numero.in_(banco_nums),
+    ).all() if banco_nums else []
+    banco_por_num = {b.numero: b for b in bancos}
+
+    mov_keys = {(p.banco, p.numero) for p in pagos}
+    movs = db.query(MovBanco).filter(
+        MovBanco.empresa_id == empresa_id,
+        tuple_(MovBanco.banco, MovBanco.numero).in_(mov_keys),
+    ).all() if mov_keys else []
+    mov_por_key = {(m.banco, m.numero): m for m in movs}
+
+    pago_info_map = {}
+    fecha_vto_map = {}
+
+    for fac_num in numeros:
+        fac_vtos = vto_por_fac.get(fac_num, [])
+        if fac_vtos:
+            fecha_vto_map[fac_num] = min(v.fecha for v in fac_vtos)
+
+        for v in fac_vtos:
+            pago = pago_por_vto.get(v.numero)
+            if pago:
+                banco = banco_por_num.get(pago.banco)
+                mov = mov_por_key.get((pago.banco, pago.numero))
+                if banco:
+                    pago_info_map[fac_num] = FacturaPagoInfo(
+                        banco_nombre=banco.nombre or '',
+                        fecha=mov.fecha if mov else None,
+                        importe=abs(pago.importe or 0),
+                    )
+                break
+
+    return pago_info_map, fecha_vto_map
 
 
 def _cargar_pago_info(db, empresa_id, tipo_vto, fac_numero):
@@ -192,9 +256,13 @@ def get_facturas_emi(db: Session, empresa_id: int, q: str = "",
     total = query.count()
     items = query.order_by(FacturaEmitida.fecha.desc(), FacturaEmitida.numero.desc()) \
                  .offset(skip).limit(limit).all()
+
+    todos_numeros = [fac.numero for fac in items]
+    pago_info_map, fecha_vto_map = _batch_cargar_info(db, empresa_id, 'F', todos_numeros) if todos_numeros else ({}, {})
+
     for fac in items:
-        fac.pago_info = _cargar_pago_info(db, empresa_id, 'F', fac.numero) if fac.estado == 'C' else None
-        fac.fecha_vto = _cargar_fecha_vto(db, empresa_id, 'F', fac.numero) if fac.estado == 'P' else None
+        fac.pago_info = pago_info_map.get(fac.numero) if fac.estado == 'C' else None
+        fac.fecha_vto = fecha_vto_map.get(fac.numero) if fac.estado == 'P' else None
     return items, total
 
 
@@ -346,9 +414,13 @@ def get_facturas_rec(db: Session, empresa_id: int, q: str = "",
     total = query.count()
     items = query.order_by(FacturaRecibida.fecha.desc(), FacturaRecibida.numero.desc()) \
                  .offset(skip).limit(limit).all()
+
+    todos_numeros = [fac.numero for fac in items]
+    pago_info_map, fecha_vto_map = _batch_cargar_info(db, empresa_id, 'R', todos_numeros) if todos_numeros else ({}, {})
+
     for fac in items:
-        fac.pago_info = _cargar_pago_info(db, empresa_id, 'R', fac.numero) if fac.estado == 'C' else None
-        fac.fecha_vto = _cargar_fecha_vto(db, empresa_id, 'R', fac.numero) if fac.estado == 'P' else None
+        fac.pago_info = pago_info_map.get(fac.numero) if fac.estado == 'C' else None
+        fac.fecha_vto = fecha_vto_map.get(fac.numero) if fac.estado == 'P' else None
     return items, total
 
 

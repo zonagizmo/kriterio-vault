@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import datetime
+from decimal import Decimal
 
 
 # ─── Bancos ──────────────────────────────────────────────────────────────────
@@ -15,25 +16,25 @@ class BancoBase(BaseModel):
 class BancoCreate(BancoBase):
     nombre: str
     empresa_id: int
-    saldoini: Optional[float] = 0
+    saldoini: Optional[Decimal] = 0
 
 class BancoUpdate(BancoBase):
     numero: Optional[int] = None
-    saldoini: Optional[float] = None
+    saldoini: Optional[Decimal] = None
 
 class BancoRead(BancoBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     empresa_id: int
     numero: int
-    saldoini: Optional[float] = 0
-    saldoact: Optional[float] = 0
+    saldoini: Optional[Decimal] = 0
+    saldoact: Optional[Decimal] = 0
 
 
 # ─── Pagos (líneas de un movimiento) ─────────────────────────────────────────
 
 class PagoCreate(BaseModel):
-    importe: float
+    importe: Decimal
     vto: Optional[int] = None
     dirsubcta: Optional[str] = None
     declterc: Optional[str] = None
@@ -45,7 +46,7 @@ class PagoRead(BaseModel):
     empresa_id: int
     banco: int
     numero: int
-    importe: Optional[float] = 0
+    importe: Optional[Decimal] = 0
     vto: Optional[int] = None
     dirsubcta: Optional[str] = None
     dirsubcta_nombre: Optional[str] = None
@@ -68,7 +69,7 @@ class MovimientoBase(BaseModel):
     banco: Optional[int] = None
     texto: Optional[str] = None
     fecha: Optional[datetime.date] = None
-    total: Optional[float] = 0
+    total: Optional[Decimal] = 0
     clave: Optional[str] = None
     notas: Optional[str] = None
     estado: Optional[str] = None
@@ -77,13 +78,13 @@ class MovimientoBase(BaseModel):
 class MovimientoCreate(MovimientoBase):
     banco: int
     fecha: datetime.date
-    total: float
+    total: Decimal
     empresa_id: int
     pagos: list[PagoCreate] = []
     forzar: Optional[bool] = False  # omite el aviso de posible traspaso duplicado
 
 class MovimientoUpdate(MovimientoBase):
-    total: Optional[float] = None   # override para distinguir "no enviado" de 0
+    total: Optional[Decimal] = None   # override para distinguir "no enviado" de 0
     conciliado: Optional[bool] = None  # override: None = no tocar (el default False de la base reseteaba la conciliación en cada edición)
     pagos: Optional[list[PagoCreate]] = None
 
@@ -96,7 +97,7 @@ class MovimientoRead(MovimientoBase):
     tiponum: Optional[str] = None
     cnumalt: Optional[str] = None
     autotext: Optional[bool] = False
-    saldonue: Optional[float] = 0
+    saldonue: Optional[Decimal] = 0
     marca: Optional[str] = None
     pagos: list[PagoRead] = []
 
@@ -108,13 +109,13 @@ class VencimientoCreate(BaseModel):
     tipo: str
     tpnumero: Optional[int] = None
     fecha: datetime.date
-    importe: float
+    importe: Decimal
     cuenta: Optional[str] = None
     cuentadef: Optional[str] = None
 
 class VencimientoUpdate(BaseModel):
     fecha: Optional[datetime.date] = None
-    pendiente: Optional[float] = None
+    pendiente: Optional[Decimal] = None
 
 class VencimientoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -124,8 +125,8 @@ class VencimientoRead(BaseModel):
     tipo: str
     tpnumero: Optional[int] = None
     fecha: Optional[datetime.date] = None
-    importe: Optional[float] = 0
-    pendiente: Optional[float] = 0
+    importe: Optional[Decimal] = 0
+    pendiente: Optional[Decimal] = 0
     cuenta: Optional[str] = None
     cuentadef: Optional[str] = None
     pentidad: Optional[int] = None

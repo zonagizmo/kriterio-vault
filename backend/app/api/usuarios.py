@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -14,12 +15,9 @@ from app.schemas.usuarios import (
 )
 from app.services import usuarios as svc
 from app.api.contabilidad import _csv_response, _xlsx_response
-from app.services.auth import get_current_user
-
 _MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
-router = APIRouter(prefix="/api/usuarios", tags=["usuarios"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/usuarios", tags=["usuarios"], dependencies=[Depends(get_current_user)])
 
 
 # ─── Usuarios NNA ─────────────────────────────────────────────────────────────

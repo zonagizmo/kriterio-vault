@@ -1,86 +1,94 @@
 import os
-import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+import bcrypt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.db.database import get_db
+from app.models.usuarios import UsuarioSistema
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "kriterio-vault-secret-key-cambiar-en-produccion")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "kriterio-vault-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 horas
-REFRESH_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))  # 8 horas por defecto
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire, "type": "access"})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def create_refresh_token(data: dict) -> str:
-    to_encode = data.copy()
-    expire = datetime.datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
+            detail="Token invalido o expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
-):
-    from app.models.usuarios_sistema import UsuarioSistema
-
-    payload = decode_token(token)
-    if payload.get("type") != "access":
+) -> UsuarioSistema:
+    if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
+            detail="No autenticado",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: int = payload.get("sub")
-    if user_id is None:
+    payload = decode_token(credentials.credentials)
+    sub = payload.get("sub")
+    if sub is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Token invalido",
+        )
+    try:
+        user_id = int(sub)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalido",
         )
 
-    user = db.query(UsuarioSistema).filter(
-        UsuarioSistema.id == int(user_id),
-        UsuarioSistema.activo == True,
-    ).first()
-    if not user:
+    user = db.query(UsuarioSistema).filter(UsuarioSistema.id == user_id).first()
+    if user is None or not user.activo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario no encontrado o inactivo",
-            headers={"WWW-Authenticate": "Bearer"},
         )
+
     return user
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+) -> Optional[UsuarioSistema]:
+    """Version opcional - no lanza error si no hay token."""
+    if credentials is None:
+        return None
+    try:
+        return get_current_user(credentials, db)
+    except HTTPException:
+        return None

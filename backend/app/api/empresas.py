@@ -2,11 +2,49 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.empresas import Empresa
-from app.schemas.empresas import EmpresaRead, EmpresaUpdate
+from app.models.contabilidad import Cuenta, Diario
+from app.models.facturacion import FacturaEmitida, FacturaRecibida, AlbaranEmitido, AlbaranRecibido
+from app.models.bancos import Banco, MovBanco
+from app.models.usuarios import UsuarioNNA, PagaNNA
+from app.models.clientes_proveedores import Cliente, Proveedor
+from app.schemas.empresas import EmpresaRead, EmpresaCreate, EmpresaUpdate
 from app.services.auth import get_current_user
+from app.services.plan_contable import crear_plan_cuentas
 
-router = APIRouter(prefix="/api/empresas", tags=["empresas"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/empresas", tags=["empresas"])
+
+TABLAS_CON_DATOS = [
+    (Diario, "asientos contables"),
+    (FacturaEmitida, "facturas emitidas"),
+    (FacturaRecibida, "facturas recibidas"),
+    (AlbaranEmitido, "albaranes emitidos"),
+    (AlbaranRecibido, "albaranes recibidos"),
+    (MovBanco, "movimientos bancarios"),
+    (PagaNNA, "pagas NNA"),
+    (Cliente, "clientes"),
+    (Proveedor, "proveedores"),
+]
+
+
+def _empresa_tiene_datos(db: Session, empresa_id: int) -> list[str]:
+    problemas = []
+    for modelo, desc in TABLAS_CON_DATOS:
+        count = db.query(modelo).filter(modelo.empresa_id == empresa_id).count()
+        if count > 0:
+            problemas.append(f"{desc} ({count})")
+    return problemas
+
+
+def _borrar_empresa(db: Session, empresa_id: int):
+    for modelo, _ in TABLAS_CON_DATOS:
+        db.query(modelo).filter(modelo.empresa_id == empresa_id).delete()
+    db.query(Cuenta).filter(Cuenta.empresa_id == empresa_id).delete()
+    db.query(Banco).filter(Banco.empresa_id == empresa_id).delete()
+    db.query(UsuarioNNA).filter(UsuarioNNA.empresa_id == empresa_id).delete()
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if empresa:
+        db.delete(empresa)
+    db.commit()
 
 
 @router.get("", response_model=list[EmpresaRead])
@@ -22,8 +60,21 @@ def obtener_empresa(empresa_id: int, db: Session = Depends(get_db)):
     return empresa
 
 
+@router.post("", response_model=EmpresaRead, status_code=201)
+def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    existing = db.query(Empresa).filter(Empresa.codigo == data.codigo).first()
+    if existing:
+        raise HTTPException(400, "Ya existe una empresa con ese código")
+    empresa = Empresa(codigo=data.codigo, nombre=data.nombre, activa=True)
+    db.add(empresa)
+    db.commit()
+    db.refresh(empresa)
+    crear_plan_cuentas(db, empresa.id)
+    return empresa
+
+
 @router.put("/{empresa_id}", response_model=EmpresaRead)
-def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depends(get_db)):
+def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
         raise HTTPException(404, "Empresa no encontrada")
@@ -32,3 +83,15 @@ def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depen
     db.commit()
     db.refresh(empresa)
     return empresa
+
+
+@router.delete("/{empresa_id}")
+def eliminar_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(404, "Empresa no encontrada")
+    problemas = _empresa_tiene_datos(db, empresa_id)
+    if problemas:
+        raise HTTPException(400, f"No se puede eliminar: tiene datos en: {', '.join(problemas)}")
+    _borrar_empresa(db, empresa_id)
+    return {"ok": True, "mensaje": "Empresa eliminada"}

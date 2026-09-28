@@ -7,7 +7,7 @@ from decimal import Decimal
 class FacturaPagoInfo(BaseModel):
     banco_nombre: str
     fecha: Optional[datetime.date] = None
-    importe: float
+    importe: Decimal
 
 
 # ─── Familias ────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ class FacturaPagoInfo(BaseModel):
 class FamiliaBase(BaseModel):
     padre: Optional[int] = None
     texto: Optional[str] = None
-    dcto: Optional[float] = 0
+    dcto: Optional[Decimal] = 0
     tdcto: Optional[str] = None
 
 class FamiliaCreate(FamiliaBase):
@@ -41,18 +41,18 @@ class ArticuloBase(BaseModel):
     proveedor: Optional[int] = None
     familia: Optional[int] = None
     nombre: Optional[str] = None
-    pventa: Optional[float] = 0
-    dcto: Optional[float] = 0
+    pventa: Optional[Decimal] = 0
+    dcto: Optional[Decimal] = 0
     tdcto: Optional[str] = None
-    dcto2: Optional[float] = 0
-    dcto3: Optional[float] = 0
-    pcompra: Optional[float] = 0
-    pcdcto: Optional[float] = 0
+    dcto2: Optional[Decimal] = 0
+    dcto3: Optional[Decimal] = 0
+    pcompra: Optional[Decimal] = 0
+    pcdcto: Optional[Decimal] = 0
     tipoivac: Optional[int] = None
     tipoivav: Optional[int] = None
     operacionv: Optional[int] = None
     operacionc: Optional[int] = None
-    minimo: Optional[float] = 0
+    minimo: Optional[Decimal] = 0
     tipo: Optional[str] = None
     notas: Optional[str] = None
 
@@ -68,9 +68,9 @@ class ArticuloRead(ArticuloBase):
     id: int
     empresa_id: int
     numero: int
-    qinvent: Optional[float] = 0
-    qcompras: Optional[float] = 0
-    qventas: Optional[float] = 0
+    qinvent: Optional[Decimal] = 0
+    qcompras: Optional[Decimal] = 0
+    qventas: Optional[Decimal] = 0
     marca: Optional[str] = None
 
 
@@ -81,11 +81,11 @@ class ApunteBase(BaseModel):
     articulo: Optional[int] = None
     texto: Optional[str] = None
     texto2: Optional[str] = None
-    cantidad: Optional[float] = 1
-    precio: Optional[float] = 0
-    dcto1: Optional[float] = 0
-    dcto2: Optional[float] = 0
-    dcto3: Optional[float] = 0
+    cantidad: Optional[Decimal] = 1
+    precio: Optional[Decimal] = 0
+    dcto1: Optional[Decimal] = 0
+    dcto2: Optional[Decimal] = 0
+    dcto3: Optional[Decimal] = 0
     tiva: Optional[int] = None
     tipoop: Optional[int] = None
     cuenta: Optional[str] = None
@@ -102,7 +102,7 @@ class ApunteRead(ApunteBase):
     albaran: int
     talbaran: Optional[str] = None
     fecha: Optional[datetime.date] = None
-    importe: Optional[float] = 0
+    importe: Optional[Decimal] = 0
 
 
 # ─── Albaranes emitidos ───────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ class AlbaranEmiRead(AlbaranEmiBase):
     cnumero: Optional[int] = None
     tiponum: Optional[str] = None
     factura: Optional[int] = None
-    importe: Optional[float] = 0
+    importe: Optional[Decimal] = 0
     marca: Optional[str] = None
     lineas: list[ApunteRead] = []
 
@@ -165,7 +165,7 @@ class AlbaranRecRead(AlbaranRecBase):
     cnumero: Optional[int] = None
     tiponum: Optional[str] = None
     factura: Optional[int] = None
-    importe: Optional[float] = 0
+    importe: Optional[Decimal] = 0
     marca: Optional[str] = None
     lineas: list[ApunteRead] = []
 
@@ -199,8 +199,8 @@ class FacturaEmiRead(FacturaEmiBase):
     numero: int
     cnumero: Optional[int] = None
     tiponum: Optional[str] = None
-    total: Optional[float] = 0
-    totaldecl: Optional[float] = 0
+    total: Optional[Decimal] = 0
+    totaldecl: Optional[Decimal] = 0
     marca: Optional[str] = None
     lineas: list[ApunteRead] = []
     pago_info: Optional[FacturaPagoInfo] = None
@@ -240,8 +240,8 @@ class FacturaRecRead(FacturaRecBase):
     numero: int
     cnumero: Optional[int] = None
     tiponum: Optional[str] = None
-    total: Optional[float] = 0
-    totaldecl: Optional[float] = 0
+    total: Optional[Decimal] = 0
+    totaldecl: Optional[Decimal] = 0
     marca: Optional[str] = None
     lineas: list[ApunteRead] = []
     pago_info: Optional[FacturaPagoInfo] = None
@@ -273,6 +273,6 @@ class PresupuestoRead(PresupuestoBase):
     numero: int
     cnumero: Optional[int] = None
     tiponum: Optional[str] = None
-    importe: Optional[float] = 0
+    importe: Optional[Decimal] = 0
     marca: Optional[str] = None
     lineas: list[ApunteRead] = []

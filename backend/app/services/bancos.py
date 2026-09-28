@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from decimal import Decimal
 from app.models.bancos import Banco, MovBanco, Pago
 from app.models.clientes_proveedores import Vencimiento
 from app.models.facturacion import FacturaEmitida, FacturaRecibida
@@ -24,7 +25,7 @@ class TraspasoSospechosoError(Exception):
 
 
 def _buscar_traspaso_sospechoso(db: Session, empresa_id: int, banco: int,
-                                fecha, total: float, excluir_mov_id: int = None):
+                                fecha, total, excluir_mov_id: int = None):
     """Detecta un posible traspaso entre cajas dado de alta como dos movimientos
     independientes (uno por banco) en vez de usar el campo "banco destino"
     (Pago.bancot), que enlaza ambos lados y genera un único asiento. Candidato:
@@ -35,7 +36,7 @@ def _buscar_traspaso_sospechoso(db: Session, empresa_id: int, banco: int,
         MovBanco.empresa_id == empresa_id,
         MovBanco.banco != banco,
         MovBanco.fecha == fecha,
-        MovBanco.total == round(-float(total), 2),
+        MovBanco.total == -total,
     )
     if excluir_mov_id:
         candidatos = candidatos.filter(MovBanco.id != excluir_mov_id)
@@ -79,10 +80,10 @@ def _aplicar_pago_pendiente(vto, importe_pago):
     """Reduce el pendiente del vencimiento en la magnitud del pago, hacia 0.
     Respeta el signo: los abonos (importe negativo) tienen pendiente negativo y
     también deben poder compensarse hasta 0."""
-    base = float(vto.pendiente if vto.pendiente is not None else (vto.importe or 0))
+    base = vto.pendiente if vto.pendiente is not None else (vto.importe or 0)
     signo = -1 if base < 0 else 1
-    restante = max(0.0, abs(base) - abs(float(importe_pago or 0)))
-    vto.pendiente = round(signo * restante, 2)
+    restante = max(Decimal('0'), abs(base) - abs(importe_pago or 0))
+    vto.pendiente = signo * restante
 
 
 def _restaurar_pendiente(vto, importe_pago):
@@ -90,12 +91,12 @@ def _restaurar_pendiente(vto, importe_pago):
     Simétrico a `_aplicar_pago_pendiente` (que recorta a 0): al revertir un pago
     mayor que el pendiente hay que recortar también por arriba. Respeta el signo
     de los abonos."""
-    tope = abs(float(vto.importe or 0))
-    signo = -1 if float(vto.importe or 0) < 0 else 1
-    nuevo = abs(float(vto.pendiente or 0)) + abs(float(importe_pago or 0))
+    tope = abs(vto.importe or 0)
+    signo = -1 if (vto.importe or 0) < 0 else 1
+    nuevo = abs(vto.pendiente or 0) + abs(importe_pago or 0)
     if tope > 0:
         nuevo = min(nuevo, tope)
-    vto.pendiente = round(signo * nuevo, 2)
+    vto.pendiente = signo * nuevo
 
 
 def _sync_estado_factura(db, empresa_id, vto):
@@ -327,11 +328,11 @@ def _crear_mov_contraparte_inner(db, empresa_id, banco_origen, numero_origen,
         MovBanco.banco == dest_banco,
     ).scalar() or 0
 
-    saldo_prev = float(db.query(MovBanco.saldonue).filter(
+    saldo_prev = db.query(MovBanco.saldonue).filter(
         MovBanco.empresa_id == empresa_id,
         MovBanco.banco == dest_banco,
         MovBanco.numero <= ultimo,
-    ).order_by(MovBanco.numero.desc()).limit(1).scalar() or 0)
+    ).order_by(MovBanco.numero.desc()).limit(1).scalar() or 0
 
     tiponum, cnumero = _cnumero_mov(db, empresa_id, dest_banco, fecha, importe_dest)
 
@@ -357,7 +358,7 @@ def _crear_mov_contraparte_inner(db, empresa_id, banco_origen, numero_origen,
         Banco.numero == dest_banco,
     ).first()
     if banco_obj:
-        banco_obj.saldoact = round(float(banco_obj.saldoact or 0) + importe_dest, 2)
+        banco_obj.saldoact = (banco_obj.saldoact or 0) + importe_dest
 
     db.add(Pago(
         empresa_id=empresa_id,
@@ -431,7 +432,7 @@ def _create_movimiento_inner(db: Session, data: MovimientoCreate) -> MovBanco:
     if saldo_prev is None:
         saldo_prev = 0.0
 
-    saldonue = round(float(saldo_prev or 0) + data.total, 2)
+    saldonue = (saldo_prev or 0) + data.total
 
     mov = MovBanco(
         empresa_id=data.empresa_id,
@@ -456,7 +457,7 @@ def _create_movimiento_inner(db: Session, data: MovimientoCreate) -> MovBanco:
         Banco.numero == data.banco,
     ).first()
     if banco_obj:
-        banco_obj.saldoact = round(float(banco_obj.saldoact or 0) + data.total, 2)
+        banco_obj.saldoact = (banco_obj.saldoact or 0) + data.total
 
     # Pagos asociados
     for pd in data.pagos:
@@ -533,9 +534,9 @@ def _recalcular_saldos(db, empresa_id, banco_num):
         MovBanco.empresa_id == empresa_id,
         MovBanco.banco == banco_num,
     ).order_by(MovBanco.fecha, MovBanco.numero).all()
-    saldo = 0.0
+    saldo = Decimal('0')
     for m in movs:
-        saldo = round(saldo + float(m.total or 0), 2)
+        saldo = saldo + (m.total or 0)
         m.saldonue = saldo
     banco_obj = db.query(Banco).filter(
         Banco.empresa_id == empresa_id,
@@ -545,12 +546,162 @@ def _recalcular_saldos(db, empresa_id, banco_num):
         banco_obj.saldoact = saldo
 
 
+def _detectar_cambio_contable(data, total_anterior, fecha_anterior, clave_anterior) -> bool:
+    """Determina si un cambio en el movimiento requiere regenerar el asiento contable."""
+    return (
+        data.pagos is not None
+        or (data.total is not None and data.total != total_anterior)
+        or (data.fecha is not None and data.fecha != fecha_anterior)
+        or (data.clave is not None and data.clave != clave_anterior)
+    )
+
+
+def _actualizar_total(db, mov, data, total_anterior, empresa_id, banco_num):
+    """Actualiza el total del movimiento y el saldo del banco."""
+    diff = data.total - total_anterior
+    mov.total = data.total
+    banco_obj = db.query(Banco).filter(
+        Banco.empresa_id == empresa_id,
+        Banco.numero == banco_num,
+    ).first()
+    if banco_obj:
+        banco_obj.saldoact = (banco_obj.saldoact or 0) + diff
+    _recalcular_saldos(db, empresa_id, banco_num)
+
+
+def _restaurar_pagos_viejos(db, empresa_id, old_pagos, new_bancots, banco_num, mov_numero):
+    """Restaura vencimientos y elimina contrapartes de pagos eliminados.
+    Retorna diccionario bancot → pago viejo para reutilizar contrapartes."""
+    old_transfer_map = {}
+    for pd in old_pagos:
+        if pd.vto:
+            vto = db.query(Vencimiento).filter(
+                Vencimiento.empresa_id == empresa_id,
+                Vencimiento.numero == pd.vto,
+            ).first()
+            if vto:
+                _restaurar_pendiente(vto, pd.importe)
+                _sync_estado_factura(db, empresa_id, vto)
+        if pd.bancot:
+            old_transfer_map[pd.bancot] = pd
+            if pd.bancot not in new_bancots:
+                mov_contra = _find_counterpart(db, empresa_id, pd, banco_num, mov_numero)
+                if mov_contra:
+                    banco_contra = db.query(Banco).filter(
+                        Banco.empresa_id == empresa_id,
+                        Banco.numero == pd.bancot,
+                    ).first()
+                    if banco_contra:
+                        banco_contra.saldoact = (banco_contra.saldoact or 0) - mov_contra.total
+                    db.query(Pago).filter(
+                        Pago.empresa_id == empresa_id,
+                        Pago.banco == pd.bancot,
+                        Pago.numero == mov_contra.numero,
+                    ).delete()
+                    db.delete(mov_contra)
+                    db.flush()
+                    _recalcular_saldos(db, empresa_id, pd.bancot)
+        db.delete(pd)
+    db.flush()
+    return old_transfer_map
+
+
+def _crear_pagos_nuevos(db, mov, data, empresa_id, banco_num, old_transfer_map):
+    """Crea nuevos pagos y gestiona sus contrapartes (transferencias bancarias)."""
+    for pd in data.pagos:
+        pago = Pago(
+            empresa_id=empresa_id,
+            banco=banco_num,
+            numero=mov.numero,
+            importe=pd.importe,
+            vto=pd.vto,
+            dirsubcta=pd.dirsubcta,
+            declterc=pd.declterc,
+            bancot=pd.bancot,
+        )
+        db.add(pago)
+        db.flush()
+
+        if pd.bancot:
+            old_pd = old_transfer_map.get(pd.bancot)
+            mov_contra = _find_counterpart(db, empresa_id, old_pd, banco_num, mov.numero) if old_pd else None
+
+            if mov_contra:
+                new_total = -pd.importe
+                diff_contra = new_total - (mov_contra.total or 0)
+                mov_contra.total = new_total
+                mov_contra.fecha = mov.fecha
+                mov_contra.texto = mov.texto
+                mov_contra.notas = mov.notas
+                mov_contra.estado = mov.estado
+                banco_contra = db.query(Banco).filter(
+                    Banco.empresa_id == empresa_id,
+                    Banco.numero == pd.bancot,
+                ).first()
+                if banco_contra:
+                    banco_contra.saldoact = (banco_contra.saldoact or 0) + diff_contra
+                pago_contra = db.query(Pago).filter(
+                    Pago.empresa_id == empresa_id,
+                    Pago.banco == pd.bancot,
+                    Pago.numero == mov_contra.numero,
+                ).first()
+                if pago_contra:
+                    pago_contra.importe = new_total
+                pago.numerot = mov_contra.numero
+                db.flush()
+                _recalcular_saldos(db, empresa_id, pd.bancot)
+            else:
+                mov_contra = _crear_mov_contraparte(
+                    db,
+                    empresa_id=empresa_id,
+                    banco_origen=banco_num,
+                    numero_origen=mov.numero,
+                    dest_banco=pd.bancot,
+                    fecha=mov.fecha,
+                    texto=mov.texto,
+                    importe_dest=-pd.importe,
+                    notas=mov.notas,
+                    estado=mov.estado,
+                )
+                pago.numerot = mov_contra.numero
+
+        if pd.vto:
+            vto = db.query(Vencimiento).filter(
+                Vencimiento.empresa_id == empresa_id,
+                Vencimiento.numero == pd.vto,
+            ).first()
+            if vto:
+                _aplicar_pago_pendiente(vto, pd.importe)
+                _sync_estado_factura(db, empresa_id, vto)
+
+
+def _gestionar_asiento_contable(db, mov, empresa_id, banco_num, cambio_contable):
+    """Regenera o genera el asiento contable del movimiento si es necesario."""
+    banco_obj = db.query(Banco).filter(
+        Banco.empresa_id == empresa_id,
+        Banco.numero == banco_num,
+    ).first()
+    if not banco_obj or not banco_obj.cuenta:
+        return
+    todos_pagos = db.query(Pago).filter(
+        Pago.empresa_id == empresa_id,
+        Pago.banco == banco_num,
+        Pago.numero == mov.numero,
+    ).all()
+    if cambio_contable:
+        cont_svc.regenerar_asiento_banco(db, empresa_id, mov, banco_obj, todos_pagos)
+    elif not cont_svc._ya_tiene_asiento_banco(
+            db, empresa_id, banco_obj.cuenta, mov.numero, banco_num,
+            fecha=mov.fecha, importe=mov.total or 0):
+        cont_svc.generar_asiento_banco(db, empresa_id, mov, banco_obj, todos_pagos)
+
+
 def update_movimiento(db: Session, mov_id: int, data: MovimientoUpdate) -> MovBanco | None:
     mov = db.query(MovBanco).filter(MovBanco.id == mov_id).first()
     if not mov:
         return None
 
-    total_anterior = float(mov.total or 0)
+    total_anterior = mov.total or 0
     fecha_anterior = mov.fecha
     clave_anterior = mov.clave
     empresa_id = mov.empresa_id
@@ -564,25 +715,10 @@ def update_movimiento(db: Session, mov_id: int, data: MovimientoUpdate) -> MovBa
     if getattr(data, 'conciliado', None) is not None:
         mov.conciliado = data.conciliado
 
-    # Solo regenerar el asiento si cambió algo que se refleja en él (importe, pagos,
-    # fecha o clave): regenerarlo en cada guardado renumeraba el asiento sin motivo
-    cambio_contable = (
-        data.pagos is not None
-        or (data.total is not None and round(float(data.total), 2) != round(total_anterior, 2))
-        or (data.fecha is not None and data.fecha != fecha_anterior)
-        or (data.clave is not None and data.clave != clave_anterior)
-    )
+    cambio_contable = _detectar_cambio_contable(data, total_anterior, fecha_anterior, clave_anterior)
 
     if data.total is not None:
-        diff = data.total - total_anterior
-        mov.total = data.total
-        banco_obj = db.query(Banco).filter(
-            Banco.empresa_id == empresa_id,
-            Banco.numero == banco_num,
-        ).first()
-        if banco_obj:
-            banco_obj.saldoact = round(float(banco_obj.saldoact or 0) + diff, 2)
-        _recalcular_saldos(db, empresa_id, banco_num)
+        _actualizar_total(db, mov, data, total_anterior, empresa_id, banco_num)
 
     if data.pagos is not None:
         old_pagos = db.query(Pago).filter(
@@ -590,131 +726,11 @@ def update_movimiento(db: Session, mov_id: int, data: MovimientoUpdate) -> MovBa
             Pago.banco == banco_num,
             Pago.numero == mov.numero,
         ).all()
-
-        # Bancos destino que siguen existiendo en los nuevos pagos
         new_bancots = {pd.bancot for pd in data.pagos if pd.bancot}
-        # Mapa bancot → pago antiguo (para reutilizar contraparte)
-        old_transfer_map = {pd.bancot: pd for pd in old_pagos if pd.bancot}
+        old_transfer_map = _restaurar_pagos_viejos(db, empresa_id, old_pagos, new_bancots, banco_num, mov.numero)
+        _crear_pagos_nuevos(db, mov, data, empresa_id, banco_num, old_transfer_map)
 
-        # Paso 1: restaurar vencimientos y tratar contrapartes de pagos eliminados
-        for pd in old_pagos:
-            if pd.vto:
-                vto = db.query(Vencimiento).filter(
-                    Vencimiento.empresa_id == empresa_id,
-                    Vencimiento.numero == pd.vto,
-                ).first()
-                if vto:
-                    _restaurar_pendiente(vto, pd.importe)
-                    _sync_estado_factura(db, empresa_id, vto)
-            if pd.bancot and pd.bancot not in new_bancots:
-                # El banco destino desaparece: eliminar contraparte
-                mov_contra = _find_counterpart(db, empresa_id, pd, banco_num, mov.numero)
-                if mov_contra:
-                    banco_contra = db.query(Banco).filter(
-                        Banco.empresa_id == empresa_id,
-                        Banco.numero == pd.bancot,
-                    ).first()
-                    if banco_contra:
-                        banco_contra.saldoact = round(float(banco_contra.saldoact or 0) - float(mov_contra.total), 2)
-                    numero_desde = mov_contra.numero
-                    db.query(Pago).filter(
-                        Pago.empresa_id == empresa_id,
-                        Pago.banco == pd.bancot,
-                        Pago.numero == mov_contra.numero,
-                    ).delete()
-                    db.delete(mov_contra)
-                    db.flush()
-                    _recalcular_saldos(db, empresa_id, pd.bancot)
-            db.delete(pd)
-        db.flush()
-
-        # Paso 2: crear nuevos pagos; actualizar contraparte si ya existía, crear si no
-        for pd in data.pagos:
-            pago = Pago(
-                empresa_id=empresa_id,
-                banco=banco_num,
-                numero=mov.numero,
-                importe=pd.importe,
-                vto=pd.vto,
-                dirsubcta=pd.dirsubcta,
-                declterc=pd.declterc,
-                bancot=pd.bancot,
-            )
-            db.add(pago)
-            db.flush()
-
-            if pd.bancot:
-                old_pd = old_transfer_map.get(pd.bancot)
-                mov_contra = _find_counterpart(db, empresa_id, old_pd, banco_num, mov.numero) if old_pd else None
-
-                if mov_contra:
-                    # Actualizar movimiento espejo existente sin eliminarlo
-                    new_total = round(-float(pd.importe), 2)
-                    diff_contra = new_total - float(mov_contra.total or 0)
-                    mov_contra.total = new_total
-                    mov_contra.fecha = mov.fecha
-                    mov_contra.texto = mov.texto
-                    mov_contra.notas = mov.notas
-                    mov_contra.estado = mov.estado
-                    banco_contra = db.query(Banco).filter(
-                        Banco.empresa_id == empresa_id,
-                        Banco.numero == pd.bancot,
-                    ).first()
-                    if banco_contra:
-                        banco_contra.saldoact = round(float(banco_contra.saldoact or 0) + diff_contra, 2)
-                    pago_contra = db.query(Pago).filter(
-                        Pago.empresa_id == empresa_id,
-                        Pago.banco == pd.bancot,
-                        Pago.numero == mov_contra.numero,
-                    ).first()
-                    if pago_contra:
-                        pago_contra.importe = new_total
-                    pago.numerot = mov_contra.numero
-                    db.flush()
-                    _recalcular_saldos(db, empresa_id, pd.bancot)
-                else:
-                    # Banco destino nuevo: crear contraparte
-                    mov_contra = _crear_mov_contraparte(
-                        db,
-                        empresa_id=empresa_id,
-                        banco_origen=banco_num,
-                        numero_origen=mov.numero,
-                        dest_banco=pd.bancot,
-                        fecha=mov.fecha,
-                        texto=mov.texto,
-                        importe_dest=round(-float(pd.importe), 2),
-                        notas=mov.notas,
-                        estado=mov.estado,
-                    )
-                    pago.numerot = mov_contra.numero
-
-            if pd.vto:
-                vto = db.query(Vencimiento).filter(
-                    Vencimiento.empresa_id == empresa_id,
-                    Vencimiento.numero == pd.vto,
-                ).first()
-                if vto:
-                    _aplicar_pago_pendiente(vto, pd.importe)
-                    _sync_estado_factura(db, empresa_id, vto)
-
-    # Regenerar asiento contable solo si hubo cambio contable, o generarlo si falta
-    # (auto-reparación de movimientos que quedaron sin asiento)
-    banco_obj_reload = db.query(Banco).filter(
-        Banco.empresa_id == empresa_id,
-        Banco.numero == banco_num,
-    ).first()
-    if banco_obj_reload and banco_obj_reload.cuenta:
-        todos_pagos = db.query(Pago).filter(
-            Pago.empresa_id == empresa_id,
-            Pago.banco == banco_num,
-            Pago.numero == mov.numero,
-        ).all()
-        if cambio_contable:
-            cont_svc.regenerar_asiento_banco(db, empresa_id, mov, banco_obj_reload, todos_pagos)
-        elif not cont_svc._ya_tiene_asiento_banco(
-                db, empresa_id, banco_obj_reload.cuenta, mov.numero, banco_num,
-                fecha=mov.fecha, importe=float(mov.total or 0)):
-            cont_svc.generar_asiento_banco(db, empresa_id, mov, banco_obj_reload, todos_pagos)
+    _gestionar_asiento_contable(db, mov, empresa_id, banco_num, cambio_contable)
 
     registrar_operacion(db, empresa_id, 'mov_bancos', mov.uuid, 'U',
                         data.model_dump(exclude_unset=True, mode='json'))

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import datetime
+from decimal import Decimal
 
 
 # ─── Usuario NNA ─────────────────────────────────────────────────────────────
@@ -11,7 +12,7 @@ class UsuarioBase(BaseModel):
     fecha_nacimiento: Optional[datetime.date] = None
     fecha_ingreso: Optional[datetime.date] = None
     fecha_salida: Optional[datetime.date] = None
-    paga_mensual: Optional[float] = 0
+    paga_mensual: Optional[Decimal] = 0
     activo: Optional[bool] = True
     notas: Optional[str] = None
 
@@ -35,7 +36,7 @@ class PagaCreate(BaseModel):
     empresa_id: int
     usuario: int        # UsuarioNNA.numero
     fecha: datetime.date
-    importe: float
+    importe: Decimal
     notas: Optional[str] = None
 
 class PagaRead(BaseModel):
@@ -44,7 +45,7 @@ class PagaRead(BaseModel):
     empresa_id: int
     usuario: int
     fecha: datetime.date
-    importe: float
+    importe: Decimal
     notas: Optional[str] = None
 
 
@@ -52,7 +53,7 @@ class PagaRead(BaseModel):
 
 class RegistroMensualItem(BaseModel):
     usuario: int
-    importe: float
+    importe: Decimal
     notas: Optional[str] = None
 
 class RegistroMensualCreate(BaseModel):

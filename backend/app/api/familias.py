@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.facturacion import FamiliaRead, FamiliaCreate, FamiliaUpdate
 from app.services import familias as svc
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/familias", tags=["familias"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/familias", tags=["familias"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=list[FamiliaRead])

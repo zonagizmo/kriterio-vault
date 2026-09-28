@@ -1,10 +1,11 @@
 import datetime
 import hashlib
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.middleware.rate_limit import limiter
 from app.models.sync import Instalacion
 from app.schemas.sync import SyncPushItem, SyncPushResponse, SyncPushResult
 from app.services.sync_replay import replay_operacion, ReplayError
@@ -27,8 +28,13 @@ def verificar_instalacion(x_sync_key: str = Header(...), db: Session = Depends(g
     return inst
 
 
+def _sync_key(request: Request):
+    return request.headers.get("x-sync-key", "anonymous")
+
+
 @router.post("/push", response_model=SyncPushResponse)
-def push(items: list[SyncPushItem], inst: Instalacion = Depends(verificar_instalacion),
+@limiter.limit("60/minute", key_func=_sync_key)
+def push(request: Request, items: list[SyncPushItem], inst: Instalacion = Depends(verificar_instalacion),
         db: Session = Depends(get_db)):
     permitidas = {int(e) for e in inst.empresas.split(',')} if inst.empresas else None
     resultados = []

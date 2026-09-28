@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
@@ -9,10 +10,7 @@ from app.schemas.contabilidad import (
     DiarioLineaRead, AsientoCreate, AsientoRead,
 )
 from app.services import contabilidad as svc
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"], dependencies=[Depends(get_current_user)])
 
 
 # ─── Plan de cuentas ─────────────────────────────────────────────────────────
@@ -86,7 +84,7 @@ def _validar_cuadre(data: AsientoCreate):
     rompe el balance de toda la contabilidad."""
     if not data.lineas:
         raise HTTPException(400, "El asiento debe tener al menos una línea")
-    descuadre = round(sum(float(l.importe or 0) for l in data.lineas), 2)
+    descuadre = sum(l.importe or 0 for l in data.lineas)
     if abs(descuadre) >= 0.01:
         raise HTTPException(400, f"El asiento no está cuadrado (diferencia {descuadre:+.2f})")
 
@@ -372,7 +370,7 @@ def export_mayor(
     rows = [header]
     saldo = 0.0
     for l in items:
-        imp = float(l.importe or 0)
+        imp = l.importe or 0
         saldo = round(saldo + imp, 2)
         debe  = round(imp, 2) if imp > 0 else 0
         haber = round(-imp, 2) if imp < 0 else 0

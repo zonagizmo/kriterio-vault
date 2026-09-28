@@ -1,6 +1,7 @@
 from sqlalchemy import String, Integer, Numeric, Boolean, Text, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
+from decimal import Decimal
 
 
 class Parametro(Base):
@@ -32,9 +33,9 @@ class TipoIva(Base):
     tipo: Mapped[str] = mapped_column(String(1), nullable=False)
     numero: Mapped[int] = mapped_column(Integer, nullable=False)
     texto: Mapped[str] = mapped_column(String(50), nullable=True)
-    iva: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=True)
+    iva: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=True)
     cta_iva: Mapped[str] = mapped_column(String(15), nullable=True)
-    iva_re: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=True)
+    iva_re: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=True)
     cta_iva_re: Mapped[str] = mapped_column(String(15), nullable=True)
     pordefecto: Mapped[bool] = mapped_column(Boolean, default=False)
     inactivo: Mapped[bool] = mapped_column(Boolean, default=False)

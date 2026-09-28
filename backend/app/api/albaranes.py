@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.database import get_db
@@ -7,10 +8,7 @@ from app.schemas.facturacion import (
     AlbaranRecRead, AlbaranRecCreate, AlbaranRecUpdate,
 )
 from app.services import albaranes as svc
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/albaranes", tags=["albaranes"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/albaranes", tags=["albaranes"], dependencies=[Depends(get_current_user)])
 
 
 # ─── Emitidos ─────────────────────────────────────────────────────────────────

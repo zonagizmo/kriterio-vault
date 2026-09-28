@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -8,20 +9,16 @@ from app.schemas.facturacion import (
     FacturaRecRead, FacturaRecCreate, FacturaRecUpdate,
 )
 from app.services import facturas as svc
-from app.services.auth import get_current_user
-
-
 class RenumerarBody(BaseModel):
     empresa_id: int
     desde_id: Optional[int] = None
 
-router = APIRouter(prefix="/api/facturas", tags=["facturas"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/facturas", tags=["facturas"], dependencies=[Depends(get_current_user)])
 
 
 def _detalle_duplicado(fac, total_nuevo):
     fecha_txt = fac.fecha.strftime('%d/%m/%Y') if fac.fecha else 'sin fecha'
-    total_existente = float(fac.total or 0)
+    total_existente = fac.total or 0
     if abs(total_existente - (total_nuevo or 0)) < 0.005:
         aviso_total = f"y el mismo total ({total_existente:.2f} €)"
     else:

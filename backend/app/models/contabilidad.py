@@ -3,6 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 from app.models.sync_mixin import SyncMixin
 import datetime
+from decimal import Decimal
 
 
 class Cuenta(SyncMixin, Base):
@@ -12,8 +13,8 @@ class Cuenta(SyncMixin, Base):
     empresa_id: Mapped[int] = mapped_column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=False, index=True)
     texto: Mapped[str] = mapped_column(String(100), nullable=True)
-    debe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    haber: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    debe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    haber: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     pentidad: Mapped[int] = mapped_column(Integer, nullable=True)
     pdirecto: Mapped[int] = mapped_column(Integer, nullable=True)
     ptipo: Mapped[int] = mapped_column(Integer, nullable=True)
@@ -32,9 +33,9 @@ class Diario(Base):
     clave_ori: Mapped[str] = mapped_column(String(15), nullable=True)
     tipo: Mapped[str] = mapped_column(String(2), nullable=True)
     numero: Mapped[int] = mapped_column(Integer, nullable=True)
-    importe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    importe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True, index=True)
-    saldo: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    saldo: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     multi: Mapped[str] = mapped_column(String(2), nullable=True)
     marca: Mapped[str] = mapped_column(String(1), nullable=True)
 
@@ -65,7 +66,7 @@ class Analitica(Base):
     numero: Mapped[int] = mapped_column(Integer, nullable=False)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True)
     actividad: Mapped[int] = mapped_column(Integer, nullable=True)
-    importe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    importe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
 
 
 class Ajuste(Base):
@@ -76,7 +77,7 @@ class Ajuste(Base):
     tipo: Mapped[str] = mapped_column(String(2), nullable=False)
     numero: Mapped[int] = mapped_column(Integer, nullable=False)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True)
-    importe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    importe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     contra: Mapped[str] = mapped_column(String(15), nullable=True)
     cambioas: Mapped[str] = mapped_column(String(1), nullable=True)
     afectaiva: Mapped[str] = mapped_column(String(1), nullable=True)
@@ -112,7 +113,7 @@ class ExApunte(Base):
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True)
     ayuda: Mapped[str] = mapped_column(String(100), nullable=True)
     dh: Mapped[str] = mapped_column(String(1), nullable=True)
-    importe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    importe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     declterc: Mapped[str] = mapped_column(String(1), nullable=True)
 
 
@@ -136,12 +137,12 @@ class Lbi(Base):
     cuenbien: Mapped[str] = mapped_column(String(15), nullable=True)
     cuendota: Mapped[str] = mapped_column(String(15), nullable=True)
     cuenamort: Mapped[str] = mapped_column(String(15), nullable=True)
-    coste: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    residual: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    coste: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    residual: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     fecha: Mapped[datetime.date] = mapped_column(Date, nullable=True)
     fbaja: Mapped[datetime.date] = mapped_column(Date, nullable=True)
     cbaja: Mapped[str] = mapped_column(String(15), nullable=True)
-    coefi: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=True)
+    coefi: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=True)
     periodo: Mapped[int] = mapped_column(Integer, nullable=True)
     meses: Mapped[int] = mapped_column(Integer, nullable=True)
     iva: Mapped[int] = mapped_column(Integer, nullable=True)

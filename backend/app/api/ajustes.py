@@ -8,16 +8,15 @@ from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from app.services.auth import get_current_user
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from app.services.auth import get_current_user
+router = APIRouter(prefix="/api/ajustes", tags=["ajustes"], dependencies=[Depends(get_current_user)])
 
-router = APIRouter(prefix="/api/ajustes", tags=["ajustes"],
-                   dependencies=[Depends(get_current_user)])
-
-DB_PATH    = Path("./gestionmgd.db")
-BACKUP_DIR = Path("./backups")
-CONFIG_PATH = Path("./backup_config.json")
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+DB_PATH    = _BACKEND_ROOT / "gestionmgd.db"
+BACKUP_DIR = _BACKEND_ROOT / "backups"
+CONFIG_PATH = _BACKEND_ROOT / "backup_config.json"
 RETENTION_DAYS = 30
 
 _FILENAME_RE = re.compile(r'^gestionmgd_[\w-]+\.db$')

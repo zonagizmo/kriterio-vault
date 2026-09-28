@@ -1,20 +1,17 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
 from app.db.database import get_db
 from app.schemas.extras import ExtraRead, ExtraCreate, ExtraUpdate
 from app.services import extras as svc
-from app.services.auth import get_current_user
-
-
 class RenumerarBody(BaseModel):
     empresa_id: int
     desde_id: Optional[int] = None
 
-router = APIRouter(prefix="/api/extras", tags=["extras"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/extras", tags=["extras"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=dict)

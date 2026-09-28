@@ -5,6 +5,35 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.12.00] — 2026-09-28 — Decimal completo, refactor auth y empresas con plan contable
+
+### Añadido
+- **`app/services/plan_contable.py`** — Plan General Contable completo (~600 cuentas de los grupos 1-7) para inicializar empresas nuevas.
+- **`app/api/empresas.py`** — `POST /api/empresas` crea empresa con su plan de cuentas; `DELETE` con borrado en cascada y aviso (409) si la empresa tiene datos (asientos, facturas, albaranes, movimientos, pagas, clientes, proveedores).
+- **`app/db/decimal_adapter.py`** — adaptador `sqlite3` para serializar/deserializar `Decimal`.
+- **`app/api/health.py`** + **`app/middleware/rate_limit.py`** — endpoint `/health` (v1.11.08) y limiter slowapi (v1.11.10) declarados en versiones anteriores pero que **no estaban trackeados en Git**: `main.py` los importaba y el repo en HEAD no arrancaba desde una instalación limpia. Ahora incluidos.
+- **`backend/tests/`** — 8 ficheros de tests (auth API/service, bancos, contabilidad, documentos, facturas, health, rate limit) + `conftest.py` con BD en memoria: **101 tests, coverage 45%**.
+- **`backend/pyproject.toml`** — configuración de pytest (`testpaths`, `addopts`).
+- **`backend/scripts/create_admin.py`** — crea el primer usuario administrador desde CLI.
+
+### Modificado
+- **Decimal en todo el backend** (punto 12 RECOMENDACIONES, extensión): `Mapped[float]` → `Mapped[Decimal]` y `Numeric(..., asdecimal=False)` → `Numeric(...)` en ~40 campos (facturación, bancos, artículos, familias, clientes/proveedores, contabilidad, usuarios NNA). Schemas Pydantic `float` → `Decimal` y eliminados los casts `float()`/`round()` en `services/bancos.py`, `facturas.py`, `documentos.py`, `extras.py`.
+- **Auth refactor**: `bcrypt` nativo en vez de `passlib` (bug de verificación con bcrypt 4.x), `HTTPBearer` en vez de `OAuth2PasswordBearer`, tokens con `datetime.now(timezone.utc)`, expiración configurable vía `JWT_EXPIRE_MINUTES` (8h), login con rate limit 10/min y respuesta `usuario` (id, username, nombre, rol).
+- **`app/api/ajustes.py`** — rutas de BD/backups/config ancladas a `_BACKEND_ROOT` (antes dependían del CWD: los backups se perdían si se arrancaba desde otro directorio).
+- **`requirements.txt`** — añadidos `pytest`, `pytest-cov`, `httpx`, `slowapi` (faltaban: el código ya los importaba).
+
+### Eliminado
+- **`app/models/usuarios_sistema.py`** — `UsuarioSistema` unificado en `app/models/usuarios.py` (añadidos `nombre`, `email`, `rol`, `password_hash`).
+- **`POST /api/auth/refresh`** — eliminados los refresh tokens; solo access token de 8h.
+
+### Impacto
+- **Base de datos**: tabla `usuarios_sistema` con columna `password_hash` (antes `hashed_password`) + `nombre`/`email`/`rol`. `create_all` la crea; la BD local ya está migrada. No toca datos de empresas.
+- **Git**: `backend/gestionmgd.db-shm`/`-wal` y `.coverage` dejan de trackearse (binarios de datos/entes temporales, añadidos a `.gitignore`).
+- **Compatibilidad**: frontend sin cambios (`data.usuario` y `/auth/usuarios` ya coincidían).
+- **Tests**: 101 passed.
+
+---
+
 ## [1.11.22] — 2026-09-25 — Punto 21: ESLint + Prettier
 
 ### Añadido

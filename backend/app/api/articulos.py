@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.facturacion import ArticuloRead, ArticuloCreate, ArticuloUpdate
 from app.services import articulos as svc
 from typing import Optional
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/articulos", tags=["articulos"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/articulos", tags=["articulos"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=dict)

@@ -5,6 +5,7 @@ Todos comparten el mismo modelo de cabecera + líneas (apuntes).
 import time
 import logging
 import datetime
+from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.facturacion import Apunte
@@ -21,16 +22,21 @@ ESPERA_REINTENTO = 0.05  # segundos, base entre reintentos
 #           'F'=factura emitida, 'C'=factura recibida
 
 
-def calcular_importe_linea(cantidad: float, precio: float,
-                            dcto1: float = 0, dcto2: float = 0, dcto3: float = 0) -> float:
-    neto = round(cantidad * precio, 4)
+def calcular_importe_linea(cantidad, precio,
+                            dcto1=0, dcto2=0, dcto3=0):
+    cantidad = Decimal(str(cantidad or 0))
+    precio = Decimal(str(precio or 0))
+    dcto1 = Decimal(str(dcto1 or 0))
+    dcto2 = Decimal(str(dcto2 or 0))
+    dcto3 = Decimal(str(dcto3 or 0))
+    neto = (cantidad * precio).quantize(Decimal('0.0001'))
     if dcto1:
-        neto = round(neto * (1 - dcto1 / 100), 4)
+        neto = (neto * (1 - dcto1 / 100)).quantize(Decimal('0.0001'))
     if dcto2:
-        neto = round(neto * (1 - dcto2 / 100), 4)
+        neto = (neto * (1 - dcto2 / 100)).quantize(Decimal('0.0001'))
     if dcto3:
-        neto = round(neto * (1 - dcto3 / 100), 4)
-    return round(neto, 2)
+        neto = (neto * (1 - dcto3 / 100)).quantize(Decimal('0.0001'))
+    return neto.quantize(Decimal('0.01'))
 
 
 def siguiente_numero(db: Session, modelo, empresa_id: int) -> int:
@@ -123,5 +129,5 @@ def get_lineas(db: Session, empresa_id: int, albaran: int, talbaran: str) -> lis
     ).all()
 
 
-def total_lineas(lineas: list[Apunte]) -> float:
-    return round(sum(l.importe or 0 for l in lineas), 2)
+def total_lineas(lineas: list[Apunte]):
+    return sum(l.importe or 0 for l in lineas)

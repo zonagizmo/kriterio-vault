@@ -1,5 +1,5 @@
-from typing import Optional
 from pydantic import BaseModel
+from typing import Optional
 
 
 class LoginRequest(BaseModel):
@@ -7,26 +7,38 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
+class LoginResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
-    user: "UserRead"
+    usuario: dict
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
-class UserRead(BaseModel):
+class UsuarioToken(BaseModel):
     id: int
     username: str
-    activo: bool
-
-    class Config:
-        from_attributes = True
+    nombre: str
+    rol: str
 
 
-class ChangePasswordRequest(BaseModel):
+class CambioPassword(BaseModel):
     password_actual: str
+    password_nuevo: str
+
+
+class UsuarioSistemaCreate(BaseModel):
+    username: str
+    password: str
+    nombre: str
+    email: Optional[str] = None
+    rol: str = "operador"
+
+
+class UsuarioSistemaUpdate(BaseModel):
+    nombre: Optional[str] = None
+    email: Optional[str] = None
+    rol: Optional[str] = None
+    activo: Optional[bool] = None
+
+
+class CambioPasswordAdmin(BaseModel):
     password_nuevo: str

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import datetime
+from decimal import Decimal
 
 
 # ─── Plan de cuentas ─────────────────────────────────────────────────────────
@@ -20,8 +21,8 @@ class CuentaRead(CuentaBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     empresa_id: int
-    debe: Optional[float] = 0
-    haber: Optional[float] = 0
+    debe: Optional[Decimal] = 0
+    haber: Optional[Decimal] = 0
     marca: Optional[str] = None
 
 
@@ -29,7 +30,7 @@ class CuentaRead(CuentaBase):
 
 class DiarioLineaCreate(BaseModel):
     cuenta: str
-    importe: float           # positivo = Debe, negativo = Haber
+    importe: Decimal           # positivo = Debe, negativo = Haber
     clave: Optional[str] = None
     tipo: Optional[str] = None
     numero: Optional[int] = None
@@ -42,8 +43,8 @@ class DiarioLineaRead(BaseModel):
     asiento: int
     fecha: Optional[datetime.date] = None
     cuenta: Optional[str] = None
-    importe: Optional[float] = 0
-    saldo: Optional[float] = 0
+    importe: Optional[Decimal] = 0
+    saldo: Optional[Decimal] = 0
     tpasiento: Optional[str] = None
     clave: Optional[str] = None
     tipo: Optional[str] = None
@@ -71,6 +72,6 @@ class AsientoRead(BaseModel):
     tipo: Optional[str] = None
     numero: Optional[int] = None
     lineas: list[DiarioLineaRead] = []
-    total_debe: float = 0
-    total_haber: float = 0
+    total_debe: Decimal = 0
+    total_haber: Decimal = 0
     cuadrado: bool = False

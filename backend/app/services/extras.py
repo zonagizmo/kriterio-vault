@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from decimal import Decimal
 from app.models.contabilidad import Extra, ExApunte
 from app.models.clientes_proveedores import Vencimiento
 from app.schemas.extras import ExtraCreate, ExtraUpdate, ExtraPagoInfo
@@ -48,7 +49,7 @@ def _cargar_pago_info(db, empresa_id, extra_numero):
         return ExtraPagoInfo(
             banco_nombre=banco.nombre or '',
             fecha=mov.fecha if mov else None,
-            importe=float(abs(pago.importe or 0)),
+            importe=abs(pago.importe or 0),
         )
     return None
 
@@ -223,7 +224,7 @@ def update_extra(db: Session, extra_id: int, data: ExtraUpdate) -> Extra | None:
         # Importe "del documento" = suma del lado Debe (partida doblada y cuadrada,
         # coincide con el Haber) — es lo que se usó como vto_importe al crearlo.
         old_total = sum(
-            float(a.importe or 0) for a in db.query(ExApunte).filter(
+            a.importe or 0 for a in db.query(ExApunte).filter(
                 ExApunte.empresa_id == extra.empresa_id,
                 ExApunte.extra == extra.numero,
                 ExApunte.dh == 'D',
@@ -235,7 +236,7 @@ def update_extra(db: Session, extra_id: int, data: ExtraUpdate) -> Extra | None:
         ).delete()
         _crear_apuntes(db, extra.empresa_id, extra.numero, data.apuntes)
 
-        new_total = sum(float(a.importe or 0) for a in data.apuntes if a.dh == 'D')
+        new_total = sum(a.importe or 0 for a in data.apuntes if a.dh == 'D')
         delta = round(new_total - old_total, 2)
         if delta != 0 and vto and vto_existente:
             _ajustar_vencimiento_delta(db, extra.empresa_id, vto, delta)

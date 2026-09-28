@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -10,10 +11,7 @@ from app.schemas.bancos import (
     VencimientoRead, VencimientoCreate, VencimientoUpdate,
 )
 from app.services import bancos as svc
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/bancos", tags=["bancos"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/bancos", tags=["bancos"], dependencies=[Depends(get_current_user)])
 
 
 def _detalle_traspaso_sospechoso(db: Session, mov) -> dict:
@@ -28,7 +26,7 @@ def _detalle_traspaso_sospechoso(db: Session, mov) -> dict:
         "traspaso_sospechoso": True,
         "mensaje": (
             f"Ya existe un movimiento sin enlazar en \"{nombre_banco}\" con importe "
-            f"opuesto ({float(mov.total or 0):.2f} €) el {fecha_txt} "
+            f"opuesto ({mov.total or 0:.2f} €) el {fecha_txt} "
             f"(\"{mov.texto or ''}\"). Si es el mismo traspaso, indícalo con el campo "
             f"\"banco destino\" en vez de darlo de alta por separado en cada caja."
         ),

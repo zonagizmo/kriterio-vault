@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import datetime
+from decimal import Decimal
 
 
 # ─── Clientes ────────────────────────────────────────────────────────────────
@@ -45,9 +46,9 @@ class ClienteRead(ClienteBase):
     id: int
     empresa_id: int
     numero: int
-    bruto: Optional[float] = 0
-    neto: Optional[float] = 0
-    pendiente: Optional[float] = 0
+    bruto: Optional[Decimal] = 0
+    neto: Optional[Decimal] = 0
+    pendiente: Optional[Decimal] = 0
     marca: Optional[str] = None
 
 
@@ -91,9 +92,9 @@ class ProveedorRead(ProveedorBase):
     id: int
     empresa_id: int
     numero: int
-    bruto: Optional[float] = 0
-    pendiente: Optional[float] = 0
-    neto: Optional[float] = 0
+    bruto: Optional[Decimal] = 0
+    pendiente: Optional[Decimal] = 0
+    neto: Optional[Decimal] = 0
     marca: Optional[str] = None
 
 
@@ -108,7 +109,7 @@ class VencimientoRead(BaseModel):
     tipo: str
     tpnumero: Optional[int] = None
     fecha: Optional[datetime.date] = None
-    importe: Optional[float] = 0
-    pendiente: Optional[float] = 0
+    importe: Optional[Decimal] = 0
+    pendiente: Optional[Decimal] = 0
     cuenta: Optional[str] = None
     cuentadef: Optional[str] = None

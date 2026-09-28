@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.services.auth import get_current_user
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.clientes_proveedores import ProveedorRead, ProveedorCreate, ProveedorUpdate
 from app.services import proveedores as svc
-from app.services.auth import get_current_user
-
-router = APIRouter(prefix="/api/proveedores", tags=["proveedores"],
-                   dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/proveedores", tags=["proveedores"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=dict)

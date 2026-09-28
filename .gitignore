@@ -10,7 +10,13 @@ frontend/dist/
 # Bases de datos y copias de seguridad — datos reales de empresas, terceros y NNA
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 backend/backups/
+
+# Cobertura / tests
+.coverage
+.pytest_cache/
 
 # Entorno / secretos
 .env

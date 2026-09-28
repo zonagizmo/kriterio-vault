@@ -3,6 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 from app.models.sync_mixin import SyncMixin
 import datetime
+from decimal import Decimal
 
 
 class Cliente(SyncMixin, Base):
@@ -21,9 +22,9 @@ class Cliente(SyncMixin, Base):
     nif: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True, index=True)
     operacion: Mapped[int] = mapped_column(Integer, nullable=True)
-    bruto: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    neto: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    pendiente: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    bruto: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    neto: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    pendiente: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     banco_nom: Mapped[str] = mapped_column(String(4), nullable=True)
     banco_suc: Mapped[str] = mapped_column(String(4), nullable=True)
     banco_dig: Mapped[str] = mapped_column(String(2), nullable=True)
@@ -55,9 +56,9 @@ class Proveedor(SyncMixin, Base):
     nif: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True, index=True)
     operacion: Mapped[int] = mapped_column(Integer, nullable=True)
-    bruto: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    pendiente: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    neto: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    bruto: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    pendiente: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    neto: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     iva: Mapped[int] = mapped_column(Integer, nullable=True)
     ctairpf: Mapped[str] = mapped_column(String(15), nullable=True)
     anticipo: Mapped[str] = mapped_column(String(1), nullable=True)
@@ -80,8 +81,8 @@ class Vencimiento(SyncMixin, Base):
     tipo: Mapped[str] = mapped_column(String(1), nullable=False, index=True)
     tpnumero: Mapped[int] = mapped_column(Integer, nullable=True)
     fecha: Mapped[datetime.date] = mapped_column(Date, nullable=True, index=True)
-    importe: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
-    pendiente: Mapped[float] = mapped_column(Numeric(15, 2, asdecimal=False), default=0)
+    importe: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    pendiente: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     cuenta: Mapped[str] = mapped_column(String(15), nullable=True)
     cuentadef: Mapped[str] = mapped_column(String(15), nullable=True)
     pentidad: Mapped[int] = mapped_column(Integer, nullable=True)
