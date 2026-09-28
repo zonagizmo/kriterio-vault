@@ -17,23 +17,26 @@ URL="http://localhost:5173"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-# ── Buscar Node.js compatible (v14 via nvm) ───────────────────
+# ── Buscar Node.js compatible (v22 LTS) ──────────────────────
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" --no-use 2>/dev/null
 
-# Preferir v14 explícito; si no, usar el primero disponible en nvm; si no, el del PATH
-if   [ -x "$NVM_DIR/versions/node/v14.21.3/bin/node" ]; then
-  NODE="$NVM_DIR/versions/node/v14.21.3/bin/node"
-elif ls "$NVM_DIR/versions/node/" 2>/dev/null | grep -q "^v14"; then
-  V14=$(ls "$NVM_DIR/versions/node/" | grep "^v14" | sort -V | tail -1)
-  NODE="$NVM_DIR/versions/node/$V14/bin/node"
+# Preferir v22 explícito; si no, usar el primero disponible en nvm; si no, el del PATH
+if   [ -x "$NVM_DIR/versions/node/v22.22.0/bin/node" ]; then
+  NODE="$NVM_DIR/versions/node/v22.22.0/bin/node"
+elif ls "$NVM_DIR/versions/node/" 2>/dev/null | grep -q "^v22"; then
+  V22=$(ls "$NVM_DIR/versions/node/" | grep "^v22" | sort -V | tail -1)
+  NODE="$NVM_DIR/versions/node/$V22/bin/node"
 elif command -v node &>/dev/null; then
   NODE="$(command -v node)"
 else
   echo -e "${RED}Error: no se encontró Node.js.${NC}"
-  echo "  Instala Node.js v14 con: nvm install 14"
+  echo "  Instala Node.js v22 con: nvm install 22"
+  echo "  (Linux con glibc < 2.28: usa el build glibc-217 de unofficial-builds.nodejs.org)"
   exit 1
 fi
+# Asegurar que los subprocess de npm/vite resuelvan el mismo node
+export PATH="$(dirname "$NODE"):$PATH"
 
 # ── Validaciones ──────────────────────────────────────────────
 missing=0

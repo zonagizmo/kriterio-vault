@@ -10,7 +10,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 |---|----------|---------|
 | 1 | **~~Sin autenticación en ninguna API~~** | ~~Cualquiera en la red puede leer/borrar facturas, restaurar la BD, apagar el servidor.~~ **Corregido en v1.11.00**: auth JWT completo con roles (admin/operador/solo_lectura) + CRUD usuarios + guard de rutas. Usa `bcrypt` nativo (passlib+bcrypt 4.x tenía bug de verificación). |
 | 2 | **~~Sin tests~~** | ~~Ni backend ni frontend tienen un solo test.~~ **Corregido en v1.11.01**: 96 tests backend con pytest (auth, bancos, contabilidad, documentos, facturas). Coverage 45% global, 81% en auth. Infraestructura: conftest con BD en memoria, fixtures por rol, coverage configurado. |
-| 3 | **Puerto PostgreSQL expuesto** | `docker-compose.yml` expone `5432` a todas las interfaces. Debería ser `127.0.0.1:5432:5432`. **Pendiente** — no urgente mientras se use SQLite local. |
+| 3 | **~~Puerto PostgreSQL expuesto~~** | ~~`docker-compose.yml` expone `5432` a todas las interfaces.~~ **Corregido en v1.12.02**: ahora es `127.0.0.1:5432:5432` (solo accesible desde la propia máquina). |
 | 4 | **~~Race conditions en numeración~~** | ~~`siguiente_numero()` hace `MAX(numero)+1` sin bloqueo.~~ **Corregido en v1.10.03** con reintento automático + SQLite WAL/busy_timeout. |
 
 ---
@@ -22,7 +22,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 | 5 | **~~Raw SQL extenso~~** | ~~`usuarios.py` y `contabilidad.py` usan SQL crudo masivo en vez de ORM. Riesgo de SQL injection en `sync_replay.py:90-97` donde se interpola `tabla` con f-string.~~ **Corregido en v1.11.21**: whitelist de tablas en `_corregir_uuid()`. SQL injection en `_eliminar_asiento_banco()` fixeado (f-string → ORM `.in_()`). 12 queries raw SQL convertidas a ORM en `usuarios.py` (9) y `contabilidad.py` (3). Se mantienen raw SQL en `get_cuentas` (agregación compleja parametrizada) y `_crear_lineas_raw` (FK sort error documentado). |
 | 6 | **~~Funciones >100 líneas~~** | ~~`generar_asiento_banco` (~200 líneas), `update_movimiento` (~180 líneas), `get_conciliacion_bancos` (~230 líneas).~~ **Corregido en v1.11.02**: refactorizadas en sub-funciones (< 65 líneas cada una). |
 | 7 | **~~N+1 queries en facturas~~** | ~~Listados de 50 facturas ejecutan ~300 queries adicionales para cargar pagos y vencimientos.~~ **Corregido en v1.11.02**: `_batch_cargar_info` carga datos en 4 queries en vez de ~5N. |
-| 8 | **Node.js 14 EOL** | `iniciar.sh` usa Node 14 (EOL abril 2023). Vulnerabilidades de seguridad conocidas. Usar Node 18 o 20 LTS. **Pendiente** — requiere verificar compatibilidad de Vite v4.5.14 con Node 18+. |
+| 8 | **~~Node.js 14 EOL~~** | ~~`iniciar.sh` usa Node 14 (EOL abril 2023).~~ **Corregido en v1.12.02**: Node **22.22.0 LTS** (soporte hasta abr 2027). Nota: los binarios oficiales de Node ≥18 exigen glibc ≥2.28 y este equipo es Linux Mint 18 (Ubuntu 16.04, glibc 2.23), así que se usa el build `linux-x64-glibc-217` de *unofficial-builds.nodejs.org* (infraestructura del propio proyecto Node.js). Instalado en `~/.nvm/versions/node/v22.22.0` y `iniciar.sh` lo prefiere. Verificado: `npm ci` + `vite build` + dev server OK. |
 | 9 | **~~`ContabilidadPage.jsx` = 2.026 líneas~~** | ~~Contiene 13 componentes internos.~~ **Corregido en v1.11.03**: dividido en 10 archivos en `pages/contabilidad/` (utils, TabCuentas, TabDiario, TabMayor, TabSumasSaldos, TabPyG, TabBalance, TabConciliacion, TabDiagnostico, ContabilidadPage). |
 | 10 | **~~Código duplicado masivo~~** | ~~`EUR()`, `fmtFecha()`, `hoy()` duplicados en 10+ archivos. Patrón CRUD repetido en Clientes/Proveedores/Artículos.~~ **Corregido en v1.11.04-v1.11.06**: `utils/format.js` centraliza EUR/fmtFecha/hoy (13 archivos). `useCrud.js` encapsula CRUD. `CrudPage.jsx` componente genérico con columnas configurables (Clientes/Proveedores son wrappers de ~50 líneas). |
 
@@ -49,7 +49,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 | # | Problema | Detalle |
 |---|----------|---------|
 | 20 | **Sin TypeScript** | Los tipos ayudarían con la complejidad de `modal` (null/string/object). **Pendiente** — plan de migración incremental creado (9 fases, 62 archivos). Node 14 incompatible con TS 5.x; usar TS 4.9.5. |
-| 21 | **~~Sin ESLint/Prettier~~** | ~~No hay linting ni formateo consistente.~~ **Corregido en v1.11.22**: ESLint 8 (`eslint:recommended` + `react` + `react-hooks` + `prettier`). Prettier con `semi:false`, `singleQuote:true`, `trailingComma:all`. Scripts `lint`, `lint:fix`, `format`, `format:check`. 62 archivos formateados. 9 errores pre-existentes fixeados (hooks rules, empty catches, unescaped entities, unused vars). |
+| 21 | **~~Sin ESLint/Prettier~~** | ~~No hay linting ni formateo consistente.~~ **Corregido en v1.11.22**: ESLint 8 (`eslint:recommended` + `react` + `react-hooks` + `prettier`). Prettier con `semi:false`, `singleQuote:true`, `trailingComma:all`. Scripts `lint`, `lint:fix`, `format`, `format:check`. 62 archivos formateados. 9 errores pre-existentes fixeados (hooks rules, empty catches, unescaped entities, unused vars). **⚠️ Pendiente (descubierto en v1.12.02)**: `npm run lint` devuelve 45 problemas (38 errores) — no es por el cambio de Node, sino por las reglas nuevas de `eslint-plugin-react-hooks@7.1.1` (`set-state-in-effect`, `static-components`, `use-memo`) que siguen activas en los ficheros. `vite build` y el dev server sí pasan limpios. |
 | 22 | Loading states deficientes | Solo `<p>Cargando...</p>`. Sin skeletons ni spinners. |
 | 23 | Sin dark mode | Tailwind no tiene `darkMode` configurado. |
 | 24 | Paginación sin sync con URL | Un refresh pierde la posición. |
@@ -60,7 +60,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 ## Plan de acción sugerido
 
 1. **Semana 1-2**: ~~Autenticación básica (JWT simple)~~ **Hecho en v1.11.00** + ~~tests críticos~~ **Hecho en v1.11.01** (96 tests, 45% coverage)
-2. **Semana 3-4**: ~~Cerrar race conditions~~ **Hecho en v1.10.03**, ~~sanitizar SQL~~ **Pendiente**, ~~actualizar Node.js~~ **Pendiente**
+2. **Semana 3-4**: ~~Cerrar race conditions~~ **Hecho en v1.10.03**, ~~sanitizar SQL~~ **Hecho en v1.11.21**, ~~actualizar Node.js~~ **Hecho en v1.12.02** (Node 22 LTS)
 3. **Mes 2**: ~~Refactorizar `ContabilidadPage`~~ **Hecho en v1.11.03**, ~~extraer utilidades~~ **Hecho en v1.11.04**, ~~unificar servicios frontend~~ **Hecho en v1.11.00/v1.11.02**, ~~deduplicar código~~ **Hecho en v1.11.04-v1.11.06**, ~~Decimal para dinero~~ **Hecho en v1.11.07**
 4. **Mes 3**: ~~Health checks~~ **Hecho en v1.11.08**, ~~backups off-site~~ **Parcial (paths corregidos)**, hardening de Docker/systemd
 5. **Mes 4+**: TypeScript, tests completos, CI/CD

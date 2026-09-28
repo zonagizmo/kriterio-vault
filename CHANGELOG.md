@@ -5,6 +5,27 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.12.02] — 2026-09-28 — Puerto Postgres cerrado + Node.js 14 → 22 LTS
+
+### Corregido
+- **`docker-compose.yml`** (punto 3 P0 RECOMENDACIONES) — el puerto 5432 estaba expuesto a todas las interfaces; ahora `127.0.0.1:5432:5432`. Mientras la app use SQLite no afecta a nada; solo elimina acceso externo no deseado a Postgres.
+- **`iniciar.sh`** (punto 8 P1) — Node 14.21.3 (EOL abril 2023) → **Node 22.22.0 LTS** (soporte hasta abril 2027). Búsqueda de la versión actualizada a `v22` y `PATH` precargado para que los subprocess de `npm`/`vite` usen el mismo binario.
+
+### Modificado
+- **Node.js**: los binarios oficiales de Node ≥18 exigen glibc ≥2.28 y este equipo es **Linux Mint 18 (Ubuntu 16.04, glibc 2.23)** → instalado el build `linux-x64-glibc-217` de *unofficial-builds.nodejs.org* (infraestructura del proyecto Node.js) en `~/.nvm/versions/node/v22.22.0`.
+
+### Verificación
+- `npm ci` (347 paquetes), `vite build` ✅ (145 módulos, 4,4 s) y dev server en 5173 con Node 22 ✅.
+- **`npm run lint` → 45 problemas (38 errores)**: **pre-existentes y ajenos a este cambio** — provienen de las reglas nuevas de `eslint-plugin-react-hooks@7.1.1` (`set-state-in-effect`, `static-components`, `use-memo`), que ya estaban activas desde v1.11.22. Registrado como pendiente en RECOMENDACIONES (punto 21).
+
+### Impacto
+- **Base de datos**: sin cambios.
+- **Dependencias**: sin cambios (`npm ci` no modifica `package-lock.json`).
+- **Entorno**: requiere Node 22 (o superior compatible con glibc) para arrancar el frontend; el backend Python no se ve afectado.
+- **Compatibilidad**: sin cambios de API.
+
+---
+
 ## [1.12.01] — 2026-09-28 — Sincronizar versión del frontend
 
 ### Corregido
