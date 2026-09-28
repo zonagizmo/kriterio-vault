@@ -18,6 +18,8 @@ class UsuarioToken(BaseModel):
     username: str
     nombre: str
     rol: str
+    activo: bool = True
+    empresa_id: Optional[int] = None
 
 
 class CambioPassword(BaseModel):
@@ -31,6 +33,7 @@ class UsuarioSistemaCreate(BaseModel):
     nombre: str
     email: Optional[str] = None
     rol: str = "operador"
+    empresa_id: Optional[int] = None
 
 
 class UsuarioSistemaUpdate(BaseModel):
@@ -38,6 +41,7 @@ class UsuarioSistemaUpdate(BaseModel):
     email: Optional[str] = None
     rol: Optional[str] = None
     activo: Optional[bool] = None
+    empresa_id: Optional[int] = None
 
 
 class CambioPasswordAdmin(BaseModel):

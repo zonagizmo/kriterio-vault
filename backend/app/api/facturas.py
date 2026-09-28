@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ class RenumerarBody(BaseModel):
     empresa_id: int
     desde_id: Optional[int] = None
 
-router = APIRouter(prefix="/api/facturas", tags=["facturas"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/facturas", tags=["facturas"], dependencies=[Depends(require_method_permission)])
 
 
 def _detalle_duplicado(fac, total_nuevo):
@@ -40,7 +41,7 @@ def _detalle_duplicado(fac, total_nuevo):
 
 @router.get("/emitidas", response_model=dict)
 def listar_emi(
-    empresa_id: int, q: str = Query(""),
+    empresa_id: int = Depends(empresa_query), q: str = Query(""),
     cliente: Optional[int] = None,
     fecha_desde: Optional[str] = None, fecha_hasta: Optional[str] = None,
     estado: Optional[str] = None,
@@ -52,20 +53,27 @@ def listar_emi(
 
 
 @router.get("/emitidas/{factura_id}", response_model=FacturaEmiRead)
-def obtener_emi(factura_id: int, db: Session = Depends(get_db)):
+def obtener_emi(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     fac = svc.get_factura_emi(db, factura_id)
     if not fac:
         raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, fac)
     return fac
 
 
 @router.post("/emitidas", response_model=FacturaEmiRead, status_code=201)
-def crear_emi(data: FacturaEmiCreate, db: Session = Depends(get_db)):
+def crear_emi(data: FacturaEmiCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_factura_emi(db, data)
 
 
 @router.put("/emitidas/{factura_id}", response_model=FacturaEmiRead)
-def actualizar_emi(factura_id: int, data: FacturaEmiUpdate, db: Session = Depends(get_db)):
+def actualizar_emi(factura_id: int, data: FacturaEmiUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_factura_emi(db, factura_id)
+    if not previo:
+        raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     fac = svc.update_factura_emi(db, factura_id, data)
     if not fac:
         raise HTTPException(404, "Factura no encontrada")
@@ -73,7 +81,11 @@ def actualizar_emi(factura_id: int, data: FacturaEmiUpdate, db: Session = Depend
 
 
 @router.delete("/emitidas/{factura_id}", status_code=204)
-def eliminar_emi(factura_id: int, db: Session = Depends(get_db)):
+def eliminar_emi(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_factura_emi(db, factura_id)
+    if not previo:
+        raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_factura_emi(db, factura_id):
             raise HTTPException(404, "Factura no encontrada")
@@ -83,7 +95,8 @@ def eliminar_emi(factura_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/emitidas/renumerar")
-def renumerar_emi(body: RenumerarBody, db: Session = Depends(get_db)):
+def renumerar_emi(body: RenumerarBody, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, body)
     count = svc.renumerar_facturas_emi(db, body.empresa_id, body.desde_id)
     return {"renumeradas": count}
 
@@ -92,7 +105,7 @@ def renumerar_emi(body: RenumerarBody, db: Session = Depends(get_db)):
 
 @router.get("/recibidas", response_model=dict)
 def listar_rec(
-    empresa_id: int, q: str = Query(""),
+    empresa_id: int = Depends(empresa_query), q: str = Query(""),
     proveedor: Optional[int] = None,
     fecha_desde: Optional[str] = None, fecha_hasta: Optional[str] = None,
     estado: Optional[str] = None,
@@ -104,15 +117,17 @@ def listar_rec(
 
 
 @router.get("/recibidas/{factura_id}", response_model=FacturaRecRead)
-def obtener_rec(factura_id: int, db: Session = Depends(get_db)):
+def obtener_rec(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     fac = svc.get_factura_rec(db, factura_id)
     if not fac:
         raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, fac)
     return fac
 
 
 @router.post("/recibidas", response_model=FacturaRecRead, status_code=201)
-def crear_rec(data: FacturaRecCreate, db: Session = Depends(get_db)):
+def crear_rec(data: FacturaRecCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     try:
         return svc.create_factura_rec(db, data)
     except svc.FacturaDuplicadaError as e:
@@ -120,7 +135,12 @@ def crear_rec(data: FacturaRecCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/recibidas/{factura_id}", response_model=FacturaRecRead)
-def actualizar_rec(factura_id: int, data: FacturaRecUpdate, db: Session = Depends(get_db)):
+def actualizar_rec(factura_id: int, data: FacturaRecUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_factura_rec(db, factura_id)
+    if not previo:
+        raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     try:
         fac = svc.update_factura_rec(db, factura_id, data)
     except svc.FacturaDuplicadaError as e:
@@ -131,7 +151,11 @@ def actualizar_rec(factura_id: int, data: FacturaRecUpdate, db: Session = Depend
 
 
 @router.delete("/recibidas/{factura_id}", status_code=204)
-def eliminar_rec(factura_id: int, db: Session = Depends(get_db)):
+def eliminar_rec(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_factura_rec(db, factura_id)
+    if not previo:
+        raise HTTPException(404, "Factura no encontrada")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_factura_rec(db, factura_id):
             raise HTTPException(404, "Factura no encontrada")
@@ -141,6 +165,7 @@ def eliminar_rec(factura_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/recibidas/renumerar")
-def renumerar_rec(body: RenumerarBody, db: Session = Depends(get_db)):
+def renumerar_rec(body: RenumerarBody, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, body)
     count = svc.renumerar_facturas_rec(db, body.empresa_id, body.desde_id)
     return {"renumeradas": count}

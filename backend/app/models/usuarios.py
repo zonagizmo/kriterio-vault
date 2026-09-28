@@ -1,5 +1,6 @@
 from sqlalchemy import String, Integer, Numeric, Boolean, Text, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional
 from app.models.base import Base
 from app.models.sync_mixin import SyncMixin
 import datetime
@@ -17,6 +18,11 @@ class UsuarioSistema(Base):
     email: Mapped[str] = mapped_column(String(150), nullable=True)
     rol: Mapped[str] = mapped_column(String(20), default="operador")  # admin, operador, solo_lectura
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Aislamiento por empresa: NULL = acceso a todas las empresas (compatibilidad
+    # con usuarios existentes); con valor, solo ve esa empresa (404 en el resto).
+    empresa_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("empresas.id"), nullable=True, index=True
+    )
     created_at: Mapped[str] = mapped_column(String(30), nullable=True)
 
 

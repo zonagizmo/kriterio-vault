@@ -9,6 +9,8 @@ from app.models.usuarios import UsuarioNNA, PagaNNA
 from app.models.clientes_proveedores import Cliente, Proveedor
 from app.schemas.empresas import EmpresaRead, EmpresaCreate, EmpresaUpdate
 from app.services.auth import get_current_user
+from app.services.permissions import (require_configuration, empresa_query,
+                                      exigir_empresa)
 from app.services.plan_contable import crear_plan_cuentas
 
 router = APIRouter(prefix="/api/empresas", tags=["empresas"])
@@ -48,20 +50,24 @@ def _borrar_empresa(db: Session, empresa_id: int):
 
 
 @router.get("", response_model=list[EmpresaRead])
-def listar_empresas(db: Session = Depends(get_db)):
-    return db.query(Empresa).filter(Empresa.activa == True).order_by(Empresa.codigo).all()
+def listar_empresas(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    q = db.query(Empresa).filter(Empresa.activa == True)  # noqa: E712
+    if getattr(current_user, "empresa_id", None) is not None:
+        q = q.filter(Empresa.id == current_user.empresa_id)
+    return q.order_by(Empresa.codigo).all()
 
 
 @router.get("/{empresa_id}", response_model=EmpresaRead)
-def obtener_empresa(empresa_id: int, db: Session = Depends(get_db)):
+def obtener_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
         raise HTTPException(404, "Empresa no encontrada")
+    exigir_empresa(current_user, empresa, campo="id")
     return empresa
 
 
 @router.post("", response_model=EmpresaRead, status_code=201)
-def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
     existing = db.query(Empresa).filter(Empresa.codigo == data.codigo).first()
     if existing:
         raise HTTPException(400, "Ya existe una empresa con ese código")
@@ -74,7 +80,7 @@ def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_us
 
 
 @router.put("/{empresa_id}", response_model=EmpresaRead)
-def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
         raise HTTPException(404, "Empresa no encontrada")
@@ -86,7 +92,7 @@ def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depen
 
 
 @router.delete("/{empresa_id}")
-def eliminar_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def eliminar_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
         raise HTTPException(404, "Empresa no encontrada")

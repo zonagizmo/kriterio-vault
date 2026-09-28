@@ -1,20 +1,20 @@
 import datetime
 from fastapi import APIRouter, Depends
-from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.services import estadisticas as svc
 from app.api.contabilidad import _csv_response, _xlsx_response
-router = APIRouter(prefix="/api/estadisticas", tags=["estadisticas"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/estadisticas", tags=["estadisticas"], dependencies=[Depends(require_method_permission)])
 
 
 @router.get("/anios")
-def anios(empresa_id: int, db: Session = Depends(get_db)):
+def anios(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return {"anios": svc.anios_disponibles(db, empresa_id)}
 
 
 @router.get("")
-def resumen(empresa_id: int, anio: int, db: Session = Depends(get_db)):
+def resumen(anio: int, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     desde_anio = datetime.date(anio, 1, 1)
     hasta_anio = datetime.date(anio, 12, 31)
     meses = svc.evolucion_mensual(db, empresa_id, anio)
@@ -31,7 +31,7 @@ def resumen(empresa_id: int, anio: int, db: Session = Depends(get_db)):
 
 
 @router.get("/periodo")
-def periodo(empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.date, db: Session = Depends(get_db)):
+def periodo(fecha_desde: datetime.date, fecha_hasta: datetime.date, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     ingresos = svc.ingresos_periodo(db, empresa_id, fecha_desde, fecha_hasta)
     gastos = svc.gastos_periodo(db, empresa_id, fecha_desde, fecha_hasta)
     return {
@@ -46,12 +46,12 @@ def periodo(empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.d
 
 
 @router.get("/periodo/ingresos")
-def periodo_listado_ingresos(empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.date, db: Session = Depends(get_db)):
+def periodo_listado_ingresos(fecha_desde: datetime.date, fecha_hasta: datetime.date, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return {"items": svc.listado_ingresos(db, empresa_id, fecha_desde, fecha_hasta)}
 
 
 @router.get("/periodo/gastos")
-def periodo_listado_gastos(empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.date, db: Session = Depends(get_db)):
+def periodo_listado_gastos(fecha_desde: datetime.date, fecha_hasta: datetime.date, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return {"items": svc.listado_gastos(db, empresa_id, fecha_desde, fecha_hasta)}
 
 
@@ -79,7 +79,8 @@ def _rows_gastos(items: list) -> list[list]:
 
 @router.get("/periodo/ingresos/export")
 def export_listado_ingresos(
-    empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.date,
+    fecha_desde: datetime.date, fecha_hasta: datetime.date,
+    empresa_id: int = Depends(empresa_query),
     format: str = 'xlsx', db: Session = Depends(get_db),
 ):
     rows = _rows_ingresos(svc.listado_ingresos(db, empresa_id, fecha_desde, fecha_hasta))
@@ -89,7 +90,8 @@ def export_listado_ingresos(
 
 @router.get("/periodo/gastos/export")
 def export_listado_gastos(
-    empresa_id: int, fecha_desde: datetime.date, fecha_hasta: datetime.date,
+    fecha_desde: datetime.date, fecha_hasta: datetime.date,
+    empresa_id: int = Depends(empresa_query),
     format: str = 'xlsx', db: Session = Depends(get_db),
 ):
     rows = _rows_gastos(svc.listado_gastos(db, empresa_id, fecha_desde, fecha_hasta))

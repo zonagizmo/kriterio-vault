@@ -8,6 +8,7 @@ from app.schemas.auth import (
     CambioPassword, UsuarioSistemaCreate, UsuarioSistemaUpdate, CambioPasswordAdmin,
 )
 from app.services.auth import verify_password, hash_password, create_access_token, get_current_user
+from app.services.permissions import ROLES_VALIDOS, require_user_management
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -27,7 +28,7 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
     if not user.activo:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario desactivado",
         )
 
@@ -41,6 +42,8 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
             "nombre": user.nombre,
             "email": user.email,
             "rol": user.rol,
+            "activo": user.activo,
+            "empresa_id": user.empresa_id,
         },
     )
 
@@ -52,6 +55,8 @@ def get_me(current_user: UsuarioSistema = Depends(get_current_user)):
         username=current_user.username,
         nombre=current_user.nombre,
         rol=current_user.rol,
+        activo=current_user.activo,
+        empresa_id=current_user.empresa_id,
     )
 
 
@@ -64,16 +69,11 @@ def cambiar_password(data: CambioPassword, db: Session = Depends(get_db), curren
     return {"ok": True, "mensaje": "Contraseña cambiada correctamente"}
 
 
-# --- Gestion de usuarios (solo admin) ---
-
-def _require_admin(current_user: UsuarioSistema):
-    if current_user.rol != "admin":
-        raise HTTPException(403, "Solo los administradores pueden gestionar usuarios")
+# --- Gestion de usuarios (user_management: solo admin) ---
 
 
 @router.get("/usuarios", response_model=dict)
-def listar_usuarios(db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(get_current_user)):
-    _require_admin(current_user)
+def listar_usuarios(db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(require_user_management)):
     users = db.query(UsuarioSistema).order_by(UsuarioSistema.username).all()
     return {
         "total": len(users),
@@ -85,6 +85,7 @@ def listar_usuarios(db: Session = Depends(get_db), current_user: UsuarioSistema 
                 "email": u.email,
                 "rol": u.rol,
                 "activo": u.activo,
+                "empresa_id": u.empresa_id,
             }
             for u in users
         ],
@@ -92,12 +93,11 @@ def listar_usuarios(db: Session = Depends(get_db), current_user: UsuarioSistema 
 
 
 @router.post("/usuarios", status_code=201)
-def crear_usuario_sistema(data: UsuarioSistemaCreate, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(get_current_user)):
-    _require_admin(current_user)
+def crear_usuario_sistema(data: UsuarioSistemaCreate, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(require_user_management)):
     existing = db.query(UsuarioSistema).filter(UsuarioSistema.username == data.username).first()
     if existing:
         raise HTTPException(400, "Ya existe un usuario con ese nombre")
-    if data.rol not in ("admin", "operador", "solo_lectura"):
+    if data.rol not in ROLES_VALIDOS:
         raise HTTPException(400, "Rol no valido. Use: admin, operador, solo_lectura")
     user = UsuarioSistema(
         username=data.username,
@@ -106,23 +106,23 @@ def crear_usuario_sistema(data: UsuarioSistemaCreate, db: Session = Depends(get_
         email=data.email,
         rol=data.rol,
         activo=True,
+        empresa_id=data.empresa_id,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "username": user.username, "nombre": user.nombre, "email": user.email, "rol": user.rol, "activo": user.activo}
+    return {"id": user.id, "username": user.username, "nombre": user.nombre, "email": user.email, "rol": user.rol, "activo": user.activo, "empresa_id": user.empresa_id}
 
 
 @router.put("/usuarios/{user_id}")
-def actualizar_usuario_sistema(user_id: int, data: UsuarioSistemaUpdate, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(get_current_user)):
-    _require_admin(current_user)
+def actualizar_usuario_sistema(user_id: int, data: UsuarioSistemaUpdate, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(require_user_management)):
     user = db.query(UsuarioSistema).filter(UsuarioSistema.id == user_id).first()
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
     if user.id == current_user.id and data.activo is False:
         raise HTTPException(400, "No puedes desactivar tu propio usuario")
     for campo, valor in data.model_dump(exclude_unset=True).items():
-        if campo == "rol" and valor not in ("admin", "operador", "solo_lectura"):
+        if campo == "rol" and valor not in ROLES_VALIDOS:
             raise HTTPException(400, "Rol no valido")
         setattr(user, campo, valor)
     db.commit()
@@ -130,8 +130,7 @@ def actualizar_usuario_sistema(user_id: int, data: UsuarioSistemaUpdate, db: Ses
 
 
 @router.post("/usuarios/{user_id}/reset-password")
-def reset_password_admin(user_id: int, data: CambioPasswordAdmin, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(get_current_user)):
-    _require_admin(current_user)
+def reset_password_admin(user_id: int, data: CambioPasswordAdmin, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(require_user_management)):
     user = db.query(UsuarioSistema).filter(UsuarioSistema.id == user_id).first()
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
@@ -141,8 +140,7 @@ def reset_password_admin(user_id: int, data: CambioPasswordAdmin, db: Session = 
 
 
 @router.delete("/usuarios/{user_id}")
-def eliminar_usuario_sistema(user_id: int, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(get_current_user)):
-    _require_admin(current_user)
+def eliminar_usuario_sistema(user_id: int, db: Session = Depends(get_db), current_user: UsuarioSistema = Depends(require_user_management)):
     user = db.query(UsuarioSistema).filter(UsuarioSistema.id == user_id).first()
     if not user:
         raise HTTPException(404, "Usuario no encontrado")

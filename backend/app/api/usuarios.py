@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -17,14 +18,14 @@ from app.services import usuarios as svc
 from app.api.contabilidad import _csv_response, _xlsx_response
 _MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
-router = APIRouter(prefix="/api/usuarios", tags=["usuarios"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/usuarios", tags=["usuarios"], dependencies=[Depends(require_method_permission)])
 
 
 # ─── Usuarios NNA ─────────────────────────────────────────────────────────────
 
 @router.get("", response_model=dict)
 def listar(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     activo: Optional[bool] = None,
     skip: int = 0,
     limit: int = 100,
@@ -35,12 +36,18 @@ def listar(
 
 
 @router.post("", response_model=UsuarioRead, status_code=201)
-def crear(data: UsuarioCreate, db: Session = Depends(get_db)):
+def crear(data: UsuarioCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_usuario(db, data)
 
 
 @router.put("/{usuario_id}", response_model=UsuarioRead)
-def actualizar(usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_db)):
+def actualizar(usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_usuario(db, usuario_id)
+    if not previo:
+        raise HTTPException(404, "Usuario no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     u = svc.update_usuario(db, usuario_id, data)
     if not u:
         raise HTTPException(404, "Usuario no encontrado")
@@ -48,7 +55,11 @@ def actualizar(usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_d
 
 
 @router.delete("/{usuario_id}", status_code=204)
-def eliminar(usuario_id: int, db: Session = Depends(get_db)):
+def eliminar(usuario_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_usuario(db, usuario_id)
+    if not previo:
+        raise HTTPException(404, "Usuario no encontrado")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_usuario(db, usuario_id):
             raise HTTPException(404, "Usuario no encontrado")
@@ -58,12 +69,12 @@ def eliminar(usuario_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/activos-con-paga", response_model=list[UsuarioRead])
-def activos_con_paga(empresa_id: int, db: Session = Depends(get_db)):
+def activos_con_paga(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return svc.get_activos_con_paga(db, empresa_id)
 
 
 @router.get("/saldos", response_model=dict)
-def saldos_nna(empresa_id: int, db: Session = Depends(get_db)):
+def saldos_nna(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     """Devuelve {numero: saldo} desde diario para las cuentas 4001xxx."""
     return svc.get_saldos_nna(db, empresa_id)
 
@@ -72,7 +83,7 @@ def saldos_nna(empresa_id: int, db: Session = Depends(get_db)):
 
 @router.get("/pagas", response_model=dict)
 def listar_pagas(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     usuario: Optional[int] = None,
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
@@ -88,12 +99,18 @@ def listar_pagas(
 
 
 @router.post("/pagas", response_model=PagaRead, status_code=201)
-def crear_paga(data: PagaCreate, db: Session = Depends(get_db)):
+def crear_paga(data: PagaCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_paga(db, data)
 
 
 @router.delete("/pagas/{paga_id}", status_code=204)
-def eliminar_paga(paga_id: int, db: Session = Depends(get_db)):
+def eliminar_paga(paga_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    from app.models.usuarios import PagaNNA
+    previo = db.get(PagaNNA, paga_id)
+    if not previo:
+        raise HTTPException(404, "Paga no encontrada")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_paga(db, paga_id):
             raise HTTPException(404, "Paga no encontrada")
@@ -103,13 +120,14 @@ def eliminar_paga(paga_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/pagas/mes", response_model=list[PagaRead], status_code=201)
-def registrar_mes(data: RegistroMensualCreate, db: Session = Depends(get_db)):
+def registrar_mes(data: RegistroMensualCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.registrar_mes(db, data)
 
 
 @router.get("/pagas/export")
 def exportar_pagas(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     usuario: Optional[int] = None,
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
@@ -192,27 +210,29 @@ def exportar_pagas(
 
 @router.get("/pagas/resumen", response_model=dict)
 def resumen_pagas(
-    empresa_id: int,
     fecha_desde: datetime.date,
     fecha_hasta: datetime.date,
+    empresa_id: int = Depends(empresa_query),
     db: Session = Depends(get_db),
 ):
     return svc.resumen_pagas(db, empresa_id, fecha_desde, fecha_hasta)
 
 
 @router.get("/pagas/anios", response_model=dict)
-def anios_pagas(empresa_id: int, db: Session = Depends(get_db)):
+def anios_pagas(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return {"anios": svc.anios_pagas(db, empresa_id)}
 
 
 @router.get("/pagas/resumen-anual", response_model=dict)
-def resumen_pagas_anual(empresa_id: int, anio: int, db: Session = Depends(get_db)):
+def resumen_pagas_anual(anio: int, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return svc.resumen_pagas_anual(db, empresa_id, anio)
 
 
 @router.get("/pagas/resumen-anual/export")
 def exportar_resumen_pagas_anual(
-    empresa_id: int, anio: int, format: str = 'xlsx', db: Session = Depends(get_db),
+    anio: int,
+    empresa_id: int = Depends(empresa_query),
+    format: str = 'xlsx', db: Session = Depends(get_db),
 ):
     data = svc.resumen_pagas_anual(db, empresa_id, anio)
     rows = [['NNA'] + _MESES_ABR + ['Total']]

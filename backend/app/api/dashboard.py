@@ -1,6 +1,6 @@
 import datetime
 from fastapi import APIRouter, Depends
-from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from app.db.database import get_db
@@ -9,14 +9,14 @@ from app.models.facturacion import FacturaEmitida, FacturaRecibida
 from app.models.clientes_proveedores import Vencimiento
 from app.models.contabilidad import Extra, ExApunte
 from app.services import estadisticas as svc_estadisticas
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(require_method_permission)])
 
 _MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
              'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 
 @router.get("")
-def resumen(empresa_id: int, db: Session = Depends(get_db)):
+def resumen(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     hoy = datetime.date.today()
     primer_dia_mes = hoy.replace(day=1)
     if primer_dia_mes.month == 1:

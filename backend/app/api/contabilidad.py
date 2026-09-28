@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa, require_admin
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
@@ -10,14 +11,14 @@ from app.schemas.contabilidad import (
     DiarioLineaRead, AsientoCreate, AsientoRead,
 )
 from app.services import contabilidad as svc
-router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/contabilidad", tags=["contabilidad"], dependencies=[Depends(require_method_permission)])
 
 
 # ─── Plan de cuentas ─────────────────────────────────────────────────────────
 
 @router.get("/cuentas", response_model=dict)
 def listar_cuentas(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     q: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
@@ -32,12 +33,18 @@ def listar_cuentas(
 
 
 @router.post("/cuentas", response_model=CuentaRead, status_code=201)
-def crear_cuenta(data: CuentaCreate, db: Session = Depends(get_db)):
+def crear_cuenta(data: CuentaCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_cuenta(db, data)
 
 
 @router.put("/cuentas/{cuenta_id}", response_model=CuentaRead)
-def actualizar_cuenta(cuenta_id: int, data: CuentaUpdate, db: Session = Depends(get_db)):
+def actualizar_cuenta(cuenta_id: int, data: CuentaUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_cuenta(db, cuenta_id)
+    if not previo:
+        raise HTTPException(404, "Cuenta no encontrada")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     c = svc.update_cuenta(db, cuenta_id, data)
     if not c:
         raise HTTPException(404, "Cuenta no encontrada")
@@ -45,7 +52,11 @@ def actualizar_cuenta(cuenta_id: int, data: CuentaUpdate, db: Session = Depends(
 
 
 @router.delete("/cuentas/{cuenta_id}", status_code=204)
-def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db)):
+def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_cuenta(db, cuenta_id)
+    if not previo:
+        raise HTTPException(404, "Cuenta no encontrada")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_cuenta(db, cuenta_id):
             raise HTTPException(404, "Cuenta no encontrada")
@@ -58,7 +69,7 @@ def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db)):
 
 @router.get("/asientos", response_model=dict)
 def listar_asientos(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     cuenta: Optional[str] = None,
@@ -72,7 +83,7 @@ def listar_asientos(
 
 
 @router.get("/asientos/{asiento_num}", response_model=AsientoRead)
-def obtener_asiento(asiento_num: int, empresa_id: int, db: Session = Depends(get_db)):
+def obtener_asiento(asiento_num: int, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     a = svc.get_asiento(db, empresa_id, asiento_num)
     if not a:
         raise HTTPException(404, "Asiento no encontrado")
@@ -90,13 +101,15 @@ def _validar_cuadre(data: AsientoCreate):
 
 
 @router.post("/asientos", response_model=AsientoRead, status_code=201)
-def crear_asiento(data: AsientoCreate, db: Session = Depends(get_db)):
+def crear_asiento(data: AsientoCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     _validar_cuadre(data)
     return svc.create_asiento(db, data)
 
 
 @router.put("/asientos/{asiento_num}", response_model=AsientoRead)
-def actualizar_asiento(asiento_num: int, data: AsientoCreate, db: Session = Depends(get_db)):
+def actualizar_asiento(asiento_num: int, data: AsientoCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     _validar_cuadre(data)
     a = svc.update_asiento(db, data.empresa_id, asiento_num, data)
     if not a:
@@ -105,7 +118,7 @@ def actualizar_asiento(asiento_num: int, data: AsientoCreate, db: Session = Depe
 
 
 @router.delete("/asientos/{asiento_num}", status_code=204)
-def eliminar_asiento(asiento_num: int, empresa_id: int, force: bool = False, db: Session = Depends(get_db)):
+def eliminar_asiento(asiento_num: int, empresa_id: int = Depends(empresa_query), force: bool = False, db: Session = Depends(get_db)):
     try:
         if not svc.delete_asiento(db, empresa_id, asiento_num, force=force):
             raise HTTPException(404, "Asiento no encontrado")
@@ -116,20 +129,20 @@ def eliminar_asiento(asiento_num: int, empresa_id: int, force: bool = False, db:
 # ─── Libro mayor ─────────────────────────────────────────────────────────────
 
 @router.get("/diagnostico", response_model=dict)
-def diagnostico_contable(empresa_id: int, db: Session = Depends(get_db)):
+def diagnostico_contable(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db), _admin=Depends(require_admin)):
     return svc.get_diagnostico(db, empresa_id)
 
 
 @router.post("/generar-pendientes", response_model=dict)
-def generar_pendientes(empresa_id: int, db: Session = Depends(get_db)):
+def generar_pendientes(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return svc.generar_asientos_pendientes(db, empresa_id)
 
 
 @router.post("/regenerar-asiento-banco", response_model=dict)
 def regenerar_asiento_banco(
-    empresa_id: int,
     banco: int,
     numero: int,
+    empresa_id: int = Depends(empresa_query),
     db: Session = Depends(get_db),
 ):
     try:
@@ -141,13 +154,13 @@ def regenerar_asiento_banco(
 # ─── Balance de sumas y saldos ────────────────────────────────────────────────
 
 @router.get("/conciliacion-bancos", response_model=list)
-def conciliacion_bancos(empresa_id: int, db: Session = Depends(get_db)):
+def conciliacion_bancos(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return svc.get_conciliacion_bancos(db, empresa_id)
 
 
 @router.get("/sumas-saldos", response_model=dict)
 def sumas_saldos(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     nivel: Optional[int] = None,
@@ -165,7 +178,7 @@ def sumas_saldos(
 
 @router.get("/pyg", response_model=dict)
 def pyg(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
@@ -175,8 +188,8 @@ def pyg(
 
 @router.get("/mayor", response_model=dict)
 def libro_mayor(
-    empresa_id: int,
     cuenta: str,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     skip: int = 0,
@@ -190,7 +203,7 @@ def libro_mayor(
 
 @router.get("/balance")
 def balance_situacion(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
@@ -202,8 +215,8 @@ def balance_situacion(
 
 @router.post("/cierre")
 def cierre_ejercicio(
-    empresa_id: int,
     anio: int,
+    empresa_id: int = Depends(empresa_query),
     crear_apertura: bool = True,
     db: Session = Depends(get_db),
 ):
@@ -263,7 +276,7 @@ def _xlsx_response(rows: list[list], filename: str) -> StreamingResponse:
 
 @router.get("/export/diario")
 def export_diario(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
@@ -311,8 +324,8 @@ _COLS_MAYOR_DEFAULT = ['fecha', 'asiento', 'tipo', 'referencia', 'debe', 'haber'
 
 @router.get("/export/mayor")
 def export_mayor(
-    empresa_id: int,
     cuenta: str,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     columnas: Optional[str] = None,
@@ -403,7 +416,7 @@ def export_mayor(
 
 @router.get("/export/sumas-saldos")
 def export_sumas_saldos(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
@@ -421,7 +434,7 @@ def export_sumas_saldos(
 
 @router.get("/export/pyg")
 def export_pyg(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
@@ -446,7 +459,7 @@ def export_pyg(
 
 @router.get("/export/balance")
 def export_balance(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     fecha_desde: Optional[datetime.date] = None,
     fecha_hasta: Optional[datetime.date] = None,
     db: Session = Depends(get_db),

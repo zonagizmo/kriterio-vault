@@ -10,6 +10,7 @@ from app.models.sync import Instalacion
 from app.schemas.sync import SyncPushItem, SyncPushResponse, SyncPushResult
 from app.services.sync_replay import replay_operacion, ReplayError
 from app.services.auth import get_current_user
+from app.services.permissions import require_sync
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
@@ -60,8 +61,7 @@ def push(request: Request, items: list[SyncPushItem], inst: Instalacion = Depend
 
 @router.post("/ejecutar")
 def ejecutar(db: Session = Depends(get_db),
-             _user=Depends(get_current_user)):
-    """Disparo manual desde la propia instalación.
-    Requiere autenticación JWT."""
+             _user=Depends(require_sync)):
+    """Disparo manual de sincronización (permiso sync: solo admin)."""
     from app.services.sync_push import sincronizar_con_servidor
     return sincronizar_con_servidor(db)

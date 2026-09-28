@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from app.schemas.bancos import (
     VencimientoRead, VencimientoCreate, VencimientoUpdate,
 )
 from app.services import bancos as svc
-router = APIRouter(prefix="/api/bancos", tags=["bancos"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/bancos", tags=["bancos"], dependencies=[Depends(require_method_permission)])
 
 
 def _detalle_traspaso_sospechoso(db: Session, mov) -> dict:
@@ -147,25 +148,32 @@ def _enrich_mov(mov, db: Session) -> MovimientoRead:
 # ─── Cuentas bancarias ────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[BancoRead])
-def listar(empresa_id: int, db: Session = Depends(get_db)):
+def listar(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     return svc.get_bancos(db, empresa_id)
 
 
 @router.get("/{banco_id}", response_model=BancoRead)
-def obtener(banco_id: int, db: Session = Depends(get_db)):
+def obtener(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     b = svc.get_banco(db, banco_id)
     if not b:
         raise HTTPException(404, "Banco no encontrado")
+    exigir_empresa(user, b)
     return b
 
 
 @router.post("", response_model=BancoRead, status_code=201)
-def crear(data: BancoCreate, db: Session = Depends(get_db)):
+def crear(data: BancoCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_banco(db, data)
 
 
 @router.put("/{banco_id}", response_model=BancoRead)
-def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db)):
+def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_banco(db, banco_id)
+    if not previo:
+        raise HTTPException(404, "Banco no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     try:
         b = svc.update_banco(db, banco_id, data)
     except ValueError as e:
@@ -176,7 +184,11 @@ def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{banco_id}", status_code=204)
-def eliminar(banco_id: int, db: Session = Depends(get_db)):
+def eliminar(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_banco(db, banco_id)
+    if not previo:
+        raise HTTPException(404, "Banco no encontrado")
+    exigir_empresa(user, previo)
     try:
         if not svc.delete_banco(db, banco_id):
             raise HTTPException(404, "Banco no encontrado")
@@ -186,7 +198,11 @@ def eliminar(banco_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{banco_id}/reparar_saldos", response_model=BancoRead)
-def reparar_saldos(banco_id: int, db: Session = Depends(get_db)):
+def reparar_saldos(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_banco(db, banco_id)
+    if not previo:
+        raise HTTPException(404, "Banco no encontrado")
+    exigir_empresa(user, previo)
     banco = svc.reparar_saldos_banco(db, banco_id)
     if not banco:
         raise HTTPException(404, "Banco no encontrado")
@@ -197,7 +213,7 @@ def reparar_saldos(banco_id: int, db: Session = Depends(get_db)):
 
 @router.get("/movimientos/lista", response_model=dict)
 def listar_movimientos(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     banco: Optional[int] = None,
     skip: int = 0,
     limit: int = 50,
@@ -209,15 +225,17 @@ def listar_movimientos(
 
 
 @router.get("/movimientos/{mov_id}", response_model=MovimientoRead)
-def obtener_movimiento(mov_id: int, db: Session = Depends(get_db)):
+def obtener_movimiento(mov_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     mov = svc.get_movimiento(db, mov_id)
     if not mov:
         raise HTTPException(404, "Movimiento no encontrado")
+    exigir_empresa(user, mov)
     return _enrich_mov(mov, db)
 
 
 @router.post("/movimientos", response_model=MovimientoRead, status_code=201)
-def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db)):
+def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     try:
         return _enrich_mov(svc.create_movimiento(db, data), db)
     except svc.TraspasoSospechosoError as e:
@@ -225,15 +243,24 @@ def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/movimientos/{mov_id}", response_model=MovimientoRead)
-def actualizar_movimiento(mov_id: int, data: MovimientoUpdate, db: Session = Depends(get_db)):
-    mov = svc.update_movimiento(db, mov_id, data)
+def actualizar_movimiento(mov_id: int, data: MovimientoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_movimiento(db, mov_id)
+    if not previo:
+        raise HTTPException(404, "Movimiento no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
+    mov = svc.update_mov(db, mov_id, data)
     if not mov:
         raise HTTPException(404, "Movimiento no encontrado")
     return _enrich_mov(mov, db)
 
 
 @router.delete("/movimientos/{mov_id}", status_code=204)
-def eliminar_movimiento(mov_id: int, db: Session = Depends(get_db)):
+def eliminar_movimiento(mov_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_movimiento(db, mov_id)
+    if not previo:
+        raise HTTPException(404, "Movimiento no encontrado")
+    exigir_empresa(user, previo)
     if not svc.delete_movimiento(db, mov_id):
         raise HTTPException(404, "Movimiento no encontrado")
 
@@ -243,7 +270,11 @@ class ReordenarBody(BaseModel):
 
 
 @router.post("/movimientos/{mov_id}/reordenar", response_model=MovimientoRead)
-def reordenar_movimiento(mov_id: int, body: ReordenarBody, db: Session = Depends(get_db)):
+def reordenar_movimiento(mov_id: int, body: ReordenarBody, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_movimiento(db, mov_id)
+    if not previo:
+        raise HTTPException(404, "Movimiento no encontrado")
+    exigir_empresa(user, previo)
     mov = svc.reordenar_movimiento(db, mov_id, body.direccion)
     if not mov:
         raise HTTPException(404, "Movimiento no encontrado")
@@ -254,7 +285,7 @@ def reordenar_movimiento(mov_id: int, body: ReordenarBody, db: Session = Depends
 
 @router.get("/vencimientos/lista", response_model=dict)
 def listar_vencimientos(
-    empresa_id: int,
+    empresa_id: int = Depends(empresa_query),
     tipo: Optional[str] = None,
     solo_pendientes: bool = False,
     skip: int = 0,
@@ -278,13 +309,19 @@ def listar_vencimientos(
 
 
 @router.post("/vencimientos", response_model=VencimientoRead, status_code=201)
-def crear_vencimiento(data: VencimientoCreate, db: Session = Depends(get_db)):
+def crear_vencimiento(data: VencimientoCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_vencimiento(db, data)
 
 
 @router.put("/vencimientos/{vto_id}", response_model=VencimientoRead)
-def actualizar_vencimiento(vto_id: int, data: VencimientoUpdate, db: Session = Depends(get_db)):
-    vto = svc.update_vencimiento(db, vto_id, data)
+def actualizar_vencimiento(vto_id: int, data: VencimientoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_vencimiento(db, vto_id)
+    if not previo:
+        raise HTTPException(404, "Vencimiento no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
+    vto = svc.update_vto(db, vto_id, data)
     if not vto:
         raise HTTPException(404, "Vencimiento no encontrado")
     return vto

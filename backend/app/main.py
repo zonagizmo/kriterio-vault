@@ -4,11 +4,12 @@ import os
 import signal
 import uuid as uuid_lib
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import Depends, FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import inspect as sa_inspect, text as sa_text
 from app.middleware.rate_limit import limiter
 from app.db.database import crear_tablas, engine
 from app.api import auth, empresas, clientes, proveedores, familias, articulos, albaranes, facturas, bancos, contabilidad, usuarios, extras, sync
@@ -16,6 +17,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.estadisticas import router as estadisticas_router
 from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener_scheduler
 from app.api.health import router as health_router
+from app.services.permissions import require_admin
 import app.db.decimal_adapter  # registra adaptador Decimal para SQLite
 import app.models.usuarios  # registra tablas usuarios_nna, pagas_nna y usuarios_sistema
 import app.models.sync  # registra tabla sync_log
@@ -23,16 +25,46 @@ import app.models.sync  # registra tabla sync_log
 VERSION = "1.12.03"
 
 
+def _migrar_usuarios_sistema():
+    """Aislamiento por empresa + normalización de roles (SQLite y Postgres).
+
+    1. Añade usuarios_sistema.empresa_id si la instalación es antigua.
+    2. Pone a operador cualquier rol NULL o fuera de la matriz de roles.
+       Nunca asigna admin: los usuarios existentes conservan su rol válido
+       y los desconocidos caen al rol mínimo operativo (ver SECURITY.md).
+    """
+    try:
+        cols = {c["name"] for c in sa_inspect(engine).get_columns("usuarios_sistema")}
+    except Exception:
+        return  # la tabla aún no existe (create_all la crea completa)
+    if "empresa_id" not in cols:
+        with engine.begin() as conn:
+            conn.execute(sa_text(
+                "ALTER TABLE usuarios_sistema "
+                "ADD COLUMN empresa_id INTEGER REFERENCES empresas(id)"
+            ))
+            conn.execute(sa_text(
+                "CREATE INDEX IF NOT EXISTS ix_usuarios_sistema_empresa_id "
+                "ON usuarios_sistema(empresa_id)"
+            ))
+    with engine.begin() as conn:
+        conn.execute(sa_text(
+            "UPDATE usuarios_sistema SET rol = 'operador' "
+            "WHERE rol IS NULL OR rol NOT IN ('admin', 'operador', 'solo_lectura')"
+        ))
+
+
 def _migraciones():
     """Migraciones SQL para columnas añadidas tras la creación inicial.
 
-    Solo aplica a instalaciones SQLite con historial (el caso local de
-    siempre): usa sintaxis PRAGMA/parámetros propia de SQLite y su único
-    propósito es poner al día un esquema antiguo. En una base de datos
-    nueva (SQLite o Postgres) crear_tablas() ya crea el esquema actual
-    completo, así que aquí no hay nada que hacer.
+    La parte de esquema histórico aplica a instalaciones SQLite (usa
+    sintaxis PRAGMA propia de SQLite); en una base de datos nueva (SQLite o
+    Postgres) crear_tablas() ya crea el esquema actual completo. La
+    normalización de usuarios/roles (_migrar_usuarios_sistema) corre en
+    ambos dialectos.
     """
     if engine.dialect.name != "sqlite":
+        _migrar_usuarios_sistema()
         return
     raw = engine.raw_connection()
     cur = raw.cursor()
@@ -49,10 +81,12 @@ def _migraciones():
                 email TEXT,
                 rol TEXT DEFAULT 'operador',
                 activo INTEGER DEFAULT 1,
+                empresa_id INTEGER REFERENCES empresas(id),
                 created_at TEXT
             )
         """)
         cur.execute("CREATE UNIQUE INDEX ix_usuarios_sistema_username ON usuarios_sistema(username)")
+        cur.execute("CREATE INDEX ix_usuarios_sistema_empresa_id ON usuarios_sistema(empresa_id)")
 
     cols_mov = {r[1] for r in cur.execute("PRAGMA table_info(mov_bancos)")}
     if "conciliado" not in cols_mov:
@@ -103,6 +137,7 @@ def _migraciones():
 
     raw.commit()
     raw.close()
+    _migrar_usuarios_sistema()
 
 
 @asynccontextmanager
@@ -168,6 +203,13 @@ async def _apagar():
 
 
 @app.post("/api/shutdown")
-async def shutdown(background_tasks: BackgroundTasks):
+async def shutdown(background_tasks: BackgroundTasks, _user=Depends(require_admin)):
+    """Apaga el servidor. Solo admin (403 para el resto, 401 sin sesión).
+
+    KRITERIO_NO_SHUTDOWN=1 desactiva la parada real (tests): responde igual
+    pero no mata el proceso.
+    """
+    if os.getenv("KRITERIO_NO_SHUTDOWN"):
+        return {"ok": True, "aviso": "shutdown deshabilitado por KRITERIO_NO_SHUTDOWN"}
     background_tasks.add_task(_apagar)
     return {"ok": True}

@@ -104,13 +104,17 @@ sudo -u "$APP_USER" "$APP_DIR/backend/venv/bin/pip" install --upgrade pip -q
 sudo -u "$APP_USER" "$APP_DIR/backend/venv/bin/pip" install -q -r "$APP_DIR/backend/requirements.txt"
 
 if [ ! -f "$ENV_FILE" ]; then
-    SECRET_KEY="$(openssl rand -hex 32)"
+    JWT_SECRET_KEY="$(openssl rand -hex 32)"
     cat > "$ENV_FILE" <<EOF
 DATABASE_URL=postgresql://$PG_USER:$PG_PASSWORD@localhost:5432/$PG_DB
-SECRET_KEY=$SECRET_KEY
+JWT_SECRET_KEY=$JWT_SECRET_KEY
 EOF
     chown "$APP_USER:$APP_USER" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
+elif grep -q '^SECRET_KEY=' "$ENV_FILE" && ! grep -q '^JWT_SECRET_KEY=' "$ENV_FILE"; then
+    # Migración: el código solo lee JWT_SECRET_KEY; el .env antiguo usaba
+    # SECRET_KEY (quedaba sin usar y forzaba la clave efímera).
+    sudo -u "$APP_USER" sed -i 's/^SECRET_KEY=/JWT_SECRET_KEY=/' "$ENV_FILE"
 fi
 
 echo "== 8/9: servicio systemd =="

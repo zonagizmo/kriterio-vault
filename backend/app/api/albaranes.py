@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.database import get_db
@@ -8,14 +9,14 @@ from app.schemas.facturacion import (
     AlbaranRecRead, AlbaranRecCreate, AlbaranRecUpdate,
 )
 from app.services import albaranes as svc
-router = APIRouter(prefix="/api/albaranes", tags=["albaranes"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/albaranes", tags=["albaranes"], dependencies=[Depends(require_method_permission)])
 
 
 # ─── Emitidos ─────────────────────────────────────────────────────────────────
 
 @router.get("/emitidos", response_model=dict)
 def listar_emi(
-    empresa_id: int, q: str = Query(""),
+    empresa_id: int = Depends(empresa_query), q: str = Query(""),
     cliente: Optional[int] = None, skip: int = 0, limit: int = 50,
     db: Session = Depends(get_db),
 ):
@@ -24,20 +25,27 @@ def listar_emi(
 
 
 @router.get("/emitidos/{albaran_id}", response_model=AlbaranEmiRead)
-def obtener_emi(albaran_id: int, db: Session = Depends(get_db)):
+def obtener_emi(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     alb = svc.get_albaran_emi(db, albaran_id)
     if not alb:
         raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, alb)
     return alb
 
 
 @router.post("/emitidos", response_model=AlbaranEmiRead, status_code=201)
-def crear_emi(data: AlbaranEmiCreate, db: Session = Depends(get_db)):
+def crear_emi(data: AlbaranEmiCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_albaran_emi(db, data)
 
 
 @router.put("/emitidos/{albaran_id}", response_model=AlbaranEmiRead)
-def actualizar_emi(albaran_id: int, data: AlbaranEmiUpdate, db: Session = Depends(get_db)):
+def actualizar_emi(albaran_id: int, data: AlbaranEmiUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_albaran_emi(db, albaran_id)
+    if not previo:
+        raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     alb = svc.update_albaran_emi(db, albaran_id, data)
     if not alb:
         raise HTTPException(404, "Albarán no encontrado")
@@ -45,7 +53,11 @@ def actualizar_emi(albaran_id: int, data: AlbaranEmiUpdate, db: Session = Depend
 
 
 @router.delete("/emitidos/{albaran_id}", status_code=204)
-def eliminar_emi(albaran_id: int, db: Session = Depends(get_db)):
+def eliminar_emi(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_albaran_emi(db, albaran_id)
+    if not previo:
+        raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, previo)
     if not svc.delete_albaran_emi(db, albaran_id):
         raise HTTPException(404, "Albarán no encontrado")
 
@@ -54,7 +66,7 @@ def eliminar_emi(albaran_id: int, db: Session = Depends(get_db)):
 
 @router.get("/recibidos", response_model=dict)
 def listar_rec(
-    empresa_id: int, q: str = Query(""),
+    empresa_id: int = Depends(empresa_query), q: str = Query(""),
     proveedor: Optional[int] = None, skip: int = 0, limit: int = 50,
     db: Session = Depends(get_db),
 ):
@@ -63,20 +75,27 @@ def listar_rec(
 
 
 @router.get("/recibidos/{albaran_id}", response_model=AlbaranRecRead)
-def obtener_rec(albaran_id: int, db: Session = Depends(get_db)):
+def obtener_rec(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     alb = svc.get_albaran_rec(db, albaran_id)
     if not alb:
         raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, alb)
     return alb
 
 
 @router.post("/recibidos", response_model=AlbaranRecRead, status_code=201)
-def crear_rec(data: AlbaranRecCreate, db: Session = Depends(get_db)):
+def crear_rec(data: AlbaranRecCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    exigir_empresa(user, data)
     return svc.create_albaran_rec(db, data)
 
 
 @router.put("/recibidos/{albaran_id}", response_model=AlbaranRecRead)
-def actualizar_rec(albaran_id: int, data: AlbaranRecUpdate, db: Session = Depends(get_db)):
+def actualizar_rec(albaran_id: int, data: AlbaranRecUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_albaran_rec(db, albaran_id)
+    if not previo:
+        raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, previo)
+    exigir_empresa(user, data)
     alb = svc.update_albaran_rec(db, albaran_id, data)
     if not alb:
         raise HTTPException(404, "Albarán no encontrado")
@@ -84,6 +103,10 @@ def actualizar_rec(albaran_id: int, data: AlbaranRecUpdate, db: Session = Depend
 
 
 @router.delete("/recibidos/{albaran_id}", status_code=204)
-def eliminar_rec(albaran_id: int, db: Session = Depends(get_db)):
+def eliminar_rec(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    previo = svc.get_albaran_rec(db, albaran_id)
+    if not previo:
+        raise HTTPException(404, "Albarán no encontrado")
+    exigir_empresa(user, previo)
     if not svc.delete_albaran_rec(db, albaran_id):
         raise HTTPException(404, "Albarán no encontrado")

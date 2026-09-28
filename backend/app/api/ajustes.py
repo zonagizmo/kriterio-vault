@@ -9,9 +9,10 @@ from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.services.auth import get_current_user
+from app.services.permissions import require_backup, require_restore, require_configuration
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-router = APIRouter(prefix="/api/ajustes", tags=["ajustes"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/ajustes", tags=["ajustes"])
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH    = _BACKEND_ROOT / "gestionmgd.db"
@@ -126,7 +127,7 @@ class ConfigBackup(BaseModel):
 
 
 @router.get("/backups")
-def listar_backups():
+def listar_backups(_backup=Depends(require_backup)):
     cfg = leer_config()
     if not BACKUP_DIR.exists():
         return {"backups": [], **cfg, "retencion_dias": RETENTION_DAYS}
@@ -139,7 +140,7 @@ def listar_backups():
 
 
 @router.put("/config")
-def actualizar_config(body: ConfigBackup):
+def actualizar_config(body: ConfigBackup, _cfg=Depends(require_configuration)):
     if not _HORA_RE.match(body.hora):
         raise HTTPException(status_code=400, detail="Formato de hora inválido (esperado HH:MM)")
     if not body.dias or not all(0 <= d <= 6 for d in body.dias):
@@ -150,7 +151,7 @@ def actualizar_config(body: ConfigBackup):
 
 
 @router.post("/backup")
-def backup_manual():
+def backup_manual(_backup=Depends(require_backup)):
     if not DB_PATH.exists():
         raise HTTPException(status_code=404, detail="Base de datos no encontrada")
     dest = hacer_backup()
@@ -158,7 +159,7 @@ def backup_manual():
 
 
 @router.get("/backup/download/{nombre}")
-def descargar_backup(nombre: str):
+def descargar_backup(nombre: str, _backup=Depends(require_backup)):
     if not _FILENAME_RE.match(nombre):
         raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
     path = BACKUP_DIR / nombre
@@ -168,7 +169,7 @@ def descargar_backup(nombre: str):
 
 
 @router.delete("/backup/{nombre}")
-def eliminar_backup(nombre: str):
+def eliminar_backup(nombre: str, _backup=Depends(require_backup)):
     if not _FILENAME_RE.match(nombre):
         raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
     path = BACKUP_DIR / nombre
@@ -217,7 +218,7 @@ def _restaurar_desde_path(origen: Path) -> str:
 
 
 @router.post("/restaurar")
-async def restaurar_backup(archivo: UploadFile = File(...)):
+async def restaurar_backup(archivo: UploadFile = File(...), _restore=Depends(require_restore)):
     if not archivo.filename.lower().endswith(".db"):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos .db")
 
@@ -236,7 +237,7 @@ async def restaurar_backup(archivo: UploadFile = File(...)):
 
 
 @router.post("/restaurar-backup/{nombre}")
-def restaurar_backup_existente(nombre: str):
+def restaurar_backup_existente(nombre: str, _restore=Depends(require_restore)):
     if not _FILENAME_RE.match(nombre):
         raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
     path = BACKUP_DIR / nombre

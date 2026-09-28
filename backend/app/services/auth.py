@@ -9,7 +9,30 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.usuarios import UsuarioSistema
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "kriterio-vault-secret-key-change-in-production")
+def _cargar_secret_key() -> str:
+    """Clave JWT desde JWT_SECRET_KEY (única variable).
+
+    No existe secreto por defecto: si la variable no está definida se genera
+    una clave aleatoria efímera para ese proceso (los tokens no sobreviven a
+    un reinicio) y se avisa con claridad. En producción JWT_SECRET_KEY es
+    obligatoria: deploy/aprovisionar_servidor.sh la genera con openssl.
+    """
+    key = os.getenv("JWT_SECRET_KEY", "").strip()
+    if key:
+        return key
+    import secrets as _secrets
+    import warnings as _warnings
+    _warnings.warn(
+        "JWT_SECRET_KEY no está definida: se genera una clave efímera. "
+        "Los tokens caducarán al reiniciar el servidor. Define JWT_SECRET_KEY "
+        "en .env (ver .env.example).",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return _secrets.token_hex(32)
+
+
+SECRET_KEY = _cargar_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))  # 8 horas por defecto
 

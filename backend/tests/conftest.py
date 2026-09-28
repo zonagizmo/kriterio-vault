@@ -129,3 +129,14 @@ def admin_token(admin_user):
 def operador_token(operador_user):
     """Genera un JWT valido para el operador."""
     return create_access_token(data={"sub": operador_user.id, "rol": operador_user.rol})
+
+
+@pytest.fixture(scope="function")
+def solo_lectura_token(solo_lectura_user):
+    """Genera un JWT valido para el usuario de solo lectura."""
+    return create_access_token(data={"sub": solo_lectura_user.id, "rol": solo_lectura_user.rol})
+
+
+def bearer(token: str) -> dict:
+    """Cabecera Authorization para las peticiones de test."""
+    return {"Authorization": f"Bearer {token}"}

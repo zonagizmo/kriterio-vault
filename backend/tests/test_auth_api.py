@@ -45,7 +45,9 @@ class TestLogin:
             "username": "inactive",
             "password": "pw",
         })
-        assert r.status_code == 403
+        # §16: usuario desactivado = 401 Unauthorized (nunca un 403 que
+        # delataría que el usuario existe pero no tiene permisos)
+        assert r.status_code == 401
         assert "desactivado" in r.json()["detail"]
 
     def test_login_operador(self, client, operador_user):
