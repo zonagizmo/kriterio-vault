@@ -5,6 +5,17 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.12.01] — 2026-09-28 — Sincronizar versión del frontend
+
+### Corregido
+- **`frontend/src/version.js`** — el frontend mostraba `1.11.22` porque tiene su propio literal de versión (no lee `GET /api/version`). Actualizado a `1.12.01`; también `backend/app/main.py`.
+
+### Impacto
+- **Base de datos**: sin cambios.
+- **Compatibilidad**: sin cambios de API.
+
+---
+
 ## [1.12.00] — 2026-09-28 — Decimal completo, refactor auth y empresas con plan contable
 
 ### Añadido
