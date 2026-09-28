@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
@@ -45,6 +46,7 @@ function TabUsuarios({ empresa, usuarios, saldos, reload }) {
   const [error, setError] = useState('')
   const [bajaModal, setBajaModal] = useState(null)
   const [fechaBaja, setFechaBaja] = useState(hoy())
+  const { has } = usePermissions()
   const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null })
 
   const usuariosFiltrados = usuarios.filter((u) => (filtroActivo === null ? true : u.activo === filtroActivo))
@@ -148,9 +150,11 @@ function TabUsuarios({ empresa, usuarios, saldos, reload }) {
           ))}
         </div>
         <span className="text-sm text-gray-500 flex-1">{usuariosFiltrados.length} usuarios</span>
-        <button className="btn btn-primary" onClick={abrirNuevo}>
-          + Nuevo usuario
-        </button>
+        {has('create') && (
+          <button className="btn btn-primary" onClick={abrirNuevo}>
+            + Nuevo usuario
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -230,17 +234,21 @@ function TabUsuarios({ empresa, usuarios, saldos, reload }) {
                     >
                       Mayor
                     </button>
-                    <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(u)}>
-                      Editar
-                    </button>
-                    {u.activo && (
+                    {has('update') && (
+                      <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(u)}>
+                        Editar
+                      </button>
+                    )}
+                    {has('update') && u.activo && (
                       <button className="btn btn-secondary text-xs" onClick={() => abrirBaja(u)}>
                         Baja
                       </button>
                     )}
-                    <button className="btn btn-danger text-xs" onClick={() => eliminar(u)}>
-                      X
-                    </button>
+                    {has('delete') && (
+                      <button className="btn btn-danger text-xs" onClick={() => eliminar(u)}>
+                        X
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -691,6 +699,7 @@ function TabPagas({ empresa, usuarios }) {
   const [skip, setSkip] = useState(0)
   const [limit, setLimit] = useState(50)
   const [modalSemana, setModalSemana] = useState(false)
+  const { has } = usePermissions()
   const [modalPaga, setModalPaga] = useState(false)
   const [formPaga, setFormPaga] = useState({})
   const [error, setError] = useState('')
@@ -853,12 +862,16 @@ function TabPagas({ empresa, usuarios }) {
             </div>
           )}
         </div>
-        <button className="btn btn-secondary self-end" onClick={abrirPagaIndividual}>
-          + Paga individual
-        </button>
-        <button className="btn btn-primary self-end" onClick={() => setModalSemana(true)}>
-          Registrar mes
-        </button>
+        {has('create') && (
+          <button className="btn btn-secondary self-end" onClick={abrirPagaIndividual}>
+            + Paga individual
+          </button>
+        )}
+        {has('create') && (
+          <button className="btn btn-primary self-end" onClick={() => setModalSemana(true)}>
+            Registrar mes
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -902,9 +915,11 @@ function TabPagas({ empresa, usuarios }) {
                 <td className="px-4 py-2.5 text-right font-semibold text-gray-800">{EUR(p.importe)}</td>
                 <td className="px-4 py-2.5 text-gray-500 text-xs">{p.notas}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <button className="btn btn-danger text-xs" onClick={() => eliminar(p)}>
-                    Eliminar
-                  </button>
+                  {has('delete') && (
+                    <button className="btn btn-danger text-xs" onClick={() => eliminar(p)}>
+                      Eliminar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

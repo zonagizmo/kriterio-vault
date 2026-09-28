@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { getConciliacion, regenerarAsientoBanco } from '../../services/contabilidad'
 import { EUR, fmtFecha } from './utils'
+import { usePermissions } from '../../hooks/usePermissions'
 
 function FilaBanco({ b, empresaId, onRefresh }) {
+  const { has } = usePermissions()
   const [abierto, setAbierto] = useState(false)
   const [corrigiendo, setCorrigiendo] = useState(null)
   const [avisos, setAvisos] = useState({})
@@ -104,7 +106,7 @@ function FilaBanco({ b, empresaId, onRefresh }) {
                         <td className="py-1 text-right">
                           {p.es_transferencia ? (
                             <span className="text-xs text-amber-600 italic">transferencia</span>
-                          ) : (
+                          ) : has('create') ? (
                             <button
                               className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50"
                               disabled={corrigiendo === p.numero}
@@ -112,7 +114,7 @@ function FilaBanco({ b, empresaId, onRefresh }) {
                             >
                               {corrigiendo === p.numero ? '...' : 'Generar'}
                             </button>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -153,13 +155,15 @@ function FilaBanco({ b, empresaId, onRefresh }) {
                         <td className="py-1 text-right font-mono text-amber-700">{EUR(p.total_lm)}</td>
                         <td className="py-1 text-right font-mono text-red-600">{EUR(p.diferencia)}</td>
                         <td className="py-1 text-right">
-                          <button
-                            className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
-                            disabled={corrigiendo === p.numero}
-                            onClick={() => corregir(p.numero)}
-                          >
-                            {corrigiendo === p.numero ? '...' : 'Corregir'}
-                          </button>
+                          {has('create') && (
+                            <button
+                              className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
+                              disabled={corrigiendo === p.numero}
+                              onClick={() => corregir(p.numero)}
+                            >
+                              {corrigiendo === p.numero ? '...' : 'Corregir'}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -201,6 +205,7 @@ function FilaBanco({ b, empresaId, onRefresh }) {
 }
 
 export default function TabConciliacion({ empresa }) {
+  const { has } = usePermissions()
   const [data, setData] = useState(null)
   const [cargando, setCargando] = useState(false)
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
@@ -42,6 +43,7 @@ const mapPagoFromApi = (p) => {
 export default function MovimientosBancoPage() {
   const { numero } = useParams()
   const { empresa } = useEmpresa()
+  const { has } = usePermissions()
   const navigate = useNavigate()
 
   const [bancos, setBancos] = useState([])
@@ -580,9 +582,11 @@ export default function MovimientosBancoPage() {
           <span className="text-sm text-gray-500 flex-1">
             {total} movimiento{total !== 1 ? 's' : ''}
           </span>
-          <button className="btn btn-primary" onClick={abrirNuevo}>
-            + Nuevo movimiento
-          </button>
+          {has('create') && (
+            <button className="btn btn-primary" onClick={abrirNuevo}>
+              + Nuevo movimiento
+            </button>
+          )}
         </div>
       </div>
 
@@ -687,45 +691,57 @@ export default function MovimientosBancoPage() {
                       {EUR(saldoReal)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        title={m.conciliado ? 'Marcar como no conciliado' : 'Marcar como conciliado'}
-                        onClick={() => toggleConciliado(m)}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-colors ${
-                          m.conciliado
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-gray-300 hover:border-green-400'
-                        }`}
-                      >
-                        {m.conciliado && <span className="text-xs leading-none">✓</span>}
-                      </button>
+                      {has('update') ? (
+                        <button
+                          title={m.conciliado ? 'Marcar como no conciliado' : 'Marcar como conciliado'}
+                          onClick={() => toggleConciliado(m)}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-colors ${
+                            m.conciliado
+                              ? 'bg-green-500 border-green-500 text-white'
+                              : 'border-gray-300 hover:border-green-400'
+                          }`}
+                        >
+                          {m.conciliado && <span className="text-xs leading-none">✓</span>}
+                        </button>
+                      ) : (
+                        <span className="w-5 h-5 mx-auto block" />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1">
-                        <button
-                          title="Subir"
-                          disabled={!puedeSubir}
-                          onClick={() => reordenar(m, 'arriba')}
-                          className="text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-default text-sm px-1"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          title="Bajar"
-                          disabled={!puedeBajar}
-                          onClick={() => reordenar(m, 'abajo')}
-                          className="text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-default text-sm px-1"
-                        >
-                          ▼
-                        </button>
-                        <button className="btn btn-secondary text-xs ml-1" onClick={() => abrirEditar(m)}>
-                          Editar
-                        </button>
-                        <button
-                          className="text-red-500 hover:text-red-700 text-xs font-medium ml-1"
-                          onClick={() => eliminar(m)}
-                        >
-                          Eliminar
-                        </button>
+                        {has('update') && (
+                          <button
+                            title="Subir"
+                            disabled={!puedeSubir}
+                            onClick={() => reordenar(m, 'arriba')}
+                            className="text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-default text-sm px-1"
+                          >
+                            ▲
+                          </button>
+                        )}
+                        {has('update') && (
+                          <button
+                            title="Bajar"
+                            disabled={!puedeBajar}
+                            onClick={() => reordenar(m, 'abajo')}
+                            className="text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-default text-sm px-1"
+                          >
+                            ▼
+                          </button>
+                        )}
+                        {has('update') && (
+                          <button className="btn btn-secondary text-xs ml-1" onClick={() => abrirEditar(m)}>
+                            Editar
+                          </button>
+                        )}
+                        {has('delete') && (
+                          <button
+                            className="text-red-500 hover:text-red-700 text-xs font-medium ml-1"
+                            onClick={() => eliminar(m)}
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

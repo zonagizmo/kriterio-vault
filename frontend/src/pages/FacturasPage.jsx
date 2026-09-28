@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   getFacturasEmi,
   createFacturaEmi,
@@ -72,6 +73,7 @@ function badgeVto(fechaVto, _esEmi) {
 
 export default function FacturasPage() {
   const { empresa } = useEmpresa()
+  const { has } = usePermissions()
   const [searchParams] = useSearchParams()
 
   const tabParam = searchParams.get('tab') || 'recibidas'
@@ -300,12 +302,16 @@ export default function FacturasPage() {
             <p className="text-sm text-gray-500">{empresa.nombre}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => renumerar()} className="btn-secondary text-sm">
-              Renumerar
-            </button>
-            <button onClick={abrirNuevo} className="btn-primary">
-              + Nueva factura
-            </button>
+            {has('create') && (
+              <button onClick={() => renumerar()} className="btn-secondary text-sm">
+                Renumerar
+              </button>
+            )}
+            {has('create') && (
+              <button onClick={abrirNuevo} className="btn-primary">
+                + Nueva factura
+              </button>
+            )}
           </div>
         </div>
 
@@ -479,19 +485,23 @@ export default function FacturasPage() {
                               >
                                 Ver
                               </button>
-                              <button
-                                onClick={() => eliminar(fac.id, fac.numero)}
-                                className="text-red-500 hover:text-red-700 text-xs font-medium"
-                              >
-                                Borrar
-                              </button>
-                              <button
-                                onClick={() => renumerar(fac.id)}
-                                className="text-gray-400 hover:text-gray-600 text-xs"
-                                title="Renumerar desde aquí"
-                              >
-                                ↺
-                              </button>
+                              {has('delete') && (
+                                <button
+                                  onClick={() => eliminar(fac.id, fac.numero)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-medium"
+                                >
+                                  Borrar
+                                </button>
+                              )}
+                              {has('create') && (
+                                <button
+                                  onClick={() => renumerar(fac.id)}
+                                  className="text-gray-400 hover:text-gray-600 text-xs"
+                                  title="Renumerar desde aquí"
+                                >
+                                  ↺
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

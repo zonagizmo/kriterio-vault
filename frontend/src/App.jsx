@@ -1,6 +1,7 @@
 import { Component } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
+import { usePermissions } from './hooks/usePermissions'
 import { EmpresaProvider } from './hooks/useEmpresa.jsx'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
@@ -51,6 +52,14 @@ class ErrorBoundary extends Component {
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  return children
+}
+
+/** Ruta reservada a un permiso concreto: si no lo tiene, vuelve al inicio.
+ *  Reflejo de la política del backend (ahí se devuelve 403 de verdad). */
+function RequierePermiso({ perm, children }) {
+  const { has } = usePermissions()
+  if (!has(perm)) return <Navigate to="/inicio" replace />
   return children
 }
 
@@ -176,7 +185,9 @@ function AuthenticatedRoutes() {
           path="/ajustes"
           element={
             <Layout>
-              <AjustesPage />
+              <RequierePermiso perm="configuration">
+                <AjustesPage />
+              </RequierePermiso>
             </Layout>
           }
         />
@@ -184,7 +195,9 @@ function AuthenticatedRoutes() {
           path="/usuarios-sistema"
           element={
             <Layout>
-              <UsuariosSistemaPage />
+              <RequierePermiso perm="user_management">
+                <UsuariosSistemaPage />
+              </RequierePermiso>
             </Layout>
           }
         />

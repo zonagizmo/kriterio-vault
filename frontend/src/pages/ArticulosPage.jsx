@@ -6,6 +6,7 @@ import Modal from '../components/Modal'
 import Paginacion from '../components/Paginacion'
 import { EURplain as EUR } from '../utils/format'
 import useCrud from '../hooks/useCrud'
+import { usePermissions } from '../hooks/usePermissions'
 
 const VACIO = {
   nombre: '',
@@ -57,6 +58,8 @@ export default function ArticulosPage() {
     extraDeps: [filtroFam],
   })
 
+  const { has } = usePermissions()
+
   useEffect(() => {
     if (!empresa) return
     getFamilias(empresa.id)
@@ -83,9 +86,11 @@ export default function ArticulosPage() {
             <h1 className="text-2xl font-bold text-gray-900">Artículos</h1>
             <p className="text-sm text-gray-500">{empresa.nombre}</p>
           </div>
-          <button onClick={abrirNuevo} className="btn-primary">
-            + Nuevo artículo
-          </button>
+          {has('create') && (
+            <button onClick={abrirNuevo} className="btn-primary">
+              + Nuevo artículo
+            </button>
+          )}
         </div>
         <div className="flex gap-3">
           <input
@@ -149,18 +154,22 @@ export default function ArticulosPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => abrirEditar(a)}
-                              className="text-mgd-600 hover:text-mgd-800 text-xs font-medium"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => eliminar(a.id, a.nombre)}
-                              className="text-red-500 hover:text-red-700 text-xs font-medium"
-                            >
-                              Borrar
-                            </button>
+                            {has('update') && (
+                              <button
+                                onClick={() => abrirEditar(a)}
+                                className="text-mgd-600 hover:text-mgd-800 text-xs font-medium"
+                              >
+                                Editar
+                              </button>
+                            )}
+                            {has('delete') && (
+                              <button
+                                onClick={() => eliminar(a.id, a.nombre)}
+                                className="text-red-500 hover:text-red-700 text-xs font-medium"
+                              >
+                                Borrar
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

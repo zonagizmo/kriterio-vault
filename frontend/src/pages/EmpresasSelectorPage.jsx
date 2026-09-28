@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import { createEmpresa, deleteEmpresa } from '../services/empresas.js'
 import BotonApagar from '../components/BotonApagar'
 import ConfirmModal from '../components/ConfirmModal'
@@ -9,6 +10,7 @@ import ConfirmModal from '../components/ConfirmModal'
 export default function EmpresasSelectorPage() {
   const { empresas, setEmpresa, addEmpresa, removeEmpresa } = useEmpresa()
   const { user, logout } = useAuth()
+  const { has } = usePermissions()
   const navigate = useNavigate()
 
   const [showForm, setShowForm] = useState(false)
@@ -79,12 +81,14 @@ export default function EmpresasSelectorPage() {
       {empresas.length === 0 && !showForm ? (
         <div className="text-center">
           <p className="text-mgd-100 opacity-40 text-sm mb-4">No hay empresas configuradas</p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-mgd-600 hover:bg-mgd-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Crear primera empresa
-          </button>
+          {has('configuration') && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-4 py-2 bg-mgd-600 hover:bg-mgd-500 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Crear primera empresa
+            </button>
+          )}
         </div>
       ) : showForm ? (
         <form
@@ -157,7 +161,7 @@ export default function EmpresasSelectorPage() {
                 </div>
               </button>
 
-              {user?.rol === 'admin' && (
+              {has('configuration') && (
                 <button
                   onClick={() => handleDelete(emp)}
                   disabled={eliminando === emp.id}
@@ -170,12 +174,14 @@ export default function EmpresasSelectorPage() {
             </div>
           ))}
 
-          <button
-            onClick={() => setShowForm(true)}
-            className="border border-dashed border-mgd-700 hover:border-mgd-500 rounded-xl p-6 text-center transition-all group"
-          >
-            <div className="text-mgd-100 opacity-40 group-hover:opacity-70 text-sm">+ Nueva empresa</div>
-          </button>
+          {has('configuration') && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="border border-dashed border-mgd-700 hover:border-mgd-500 rounded-xl p-6 text-center transition-all group"
+            >
+              <div className="text-mgd-100 opacity-40 group-hover:opacity-70 text-sm">+ Nueva empresa</div>
+            </button>
+          )}
         </div>
       )}
 

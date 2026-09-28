@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
@@ -208,6 +209,7 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, isLast, justAddedRe
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function ExtrasPage() {
   const { empresa } = useEmpresa()
+  const { has } = usePermissions()
 
   const [extras, setExtras] = useState([])
   const [total, setTotal] = useState(0)
@@ -510,12 +512,16 @@ export default function ExtrasPage() {
           <span className="text-sm text-gray-500 ml-auto self-center">
             {total} extra{total !== 1 ? 's' : ''}
           </span>
-          <button onClick={() => renumerar()} className="btn btn-secondary text-sm">
-            Renumerar
-          </button>
-          <button className="btn btn-primary" onClick={abrirNuevo}>
-            + Nuevo extra
-          </button>
+          {has('create') && (
+            <button onClick={() => renumerar()} className="btn btn-secondary text-sm">
+              Renumerar
+            </button>
+          )}
+          {has('create') && (
+            <button className="btn btn-primary" onClick={abrirNuevo}>
+              + Nuevo extra
+            </button>
+          )}
         </div>
       </div>
 
@@ -613,15 +619,19 @@ export default function ExtrasPage() {
                       })()}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(e)}>
-                        Editar
-                      </button>
-                      <button
-                        className="text-red-500 hover:text-red-700 text-xs font-medium"
-                        onClick={() => eliminar(e)}
-                      >
-                        Eliminar
-                      </button>
+                      {has('update') && (
+                        <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(e)}>
+                          Editar
+                        </button>
+                      )}
+                      {has('delete') && (
+                        <button
+                          className="text-red-500 hover:text-red-700 text-xs font-medium"
+                          onClick={() => eliminar(e)}
+                        >
+                          Eliminar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

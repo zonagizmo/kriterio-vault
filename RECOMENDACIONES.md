@@ -8,7 +8,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 
 | # | Problema | Detalle |
 |---|----------|---------|
-| 1 | **~~Sin autenticación en ninguna API~~** | ~~Cualquiera en la red puede leer/borrar facturas, restaurar la BD, apagar el servidor.~~ **Corregido en v1.11.00**: auth JWT completo con roles (admin/operador/solo_lectura) + CRUD usuarios + guard de rutas. Usa `bcrypt` nativo (passlib+bcrypt 4.x tenía bug de verificación). |
+| 1 | **~~Sin autenticación en ninguna API~~** | ~~Cualquiera en la red puede leer/borrar facturas, restaurar la BD, apagar el servidor.~~ **Corregido en v1.11.00**: auth JWT completo con roles (admin/operador/solo_lectura) + CRUD usuarios + guard de rutas. Usa `bcrypt` nativo (passlib+bcrypt 4.x tenía bug de verificación). **Enforcement completo en v1.13.00**: RBAC real en backend (`permissions.py`: matriz Rol×Permiso centralizada, 401/403/404 por recurso, aislamiento multiempresa con `empresa_query`/`exigir_empresa`, `JWT_SECRET_KEY` sin secreto por defecto, migración de roles), 59 tests nuevos (160 totales) y UI que solo refleja la política. Ver `SECURITY.md`. |
 | 2 | **~~Sin tests~~** | ~~Ni backend ni frontend tienen un solo test.~~ **Corregido en v1.11.01**: 96 tests backend con pytest (auth, bancos, contabilidad, documentos, facturas). Coverage 45% global, 81% en auth. Infraestructura: conftest con BD en memoria, fixtures por rol, coverage configurado. |
 | 3 | **~~Puerto PostgreSQL expuesto~~** | ~~`docker-compose.yml` expone `5432` a todas las interfaces.~~ **Corregido en v1.12.02**: ahora es `127.0.0.1:5432:5432` (solo accesible desde la propia máquina). |
 | 4 | **~~Race conditions en numeración~~** | ~~`siguiente_numero()` hace `MAX(numero)+1` sin bloqueo.~~ **Corregido en v1.10.03** con reintento automático + SQLite WAL/busy_timeout. |
@@ -41,6 +41,7 @@ Análisis completo del proyecto realizado el 2026-09-18.
 | 17 | **~~Sin rate limiting~~** | ~~`/api/sync/push` no limita requests. Vulnerable a DoS.~~ **Corregido en v1.11.10**: `slowapi` integrado. Login: 10/min por IP. Sync push: 60/min por API key. Global: 200/min por IP. Tests incluidos. |
 | 18 | **~~`@app.on_event` deprecated~~** | ~~FastAPI deprecó estos eventos. Usar `lifespan`.~~ **Corregido en v1.11.11**: migrado a `@asynccontextmanager` con `lifespan`. Eliminados 4 DeprecationWarning. |
 | 19 | **~~Caddy básico~~** | ~~Falta `X-Content-Type-Options`, `X-Frame-Options`, `HSTS`.~~ **Corregido en v1.11.20**: Headers de seguridad añadidos al Caddyfile: HSTS (1 año + preload), X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Cache-Control no-store, eliminación de Server header. |
+| 26 | **Sin tests de frontend** | El RBAC de v1.13.00 oculta controles de escritura en ~15 páginas sin ningún test de UI que detecte regresiones. **Pendiente** — añadir Vitest + testing-library (smoke test por página y de `usePermissions`), empezando por `CrudPage`, `Layout` y las rutas protegidas. |
 
 ---
 

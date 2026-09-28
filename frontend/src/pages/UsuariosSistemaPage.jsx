@@ -7,6 +7,8 @@ import {
   deleteUsuarioSistema,
 } from '../services/auth'
 import { useAuth } from '../hooks/useAuth'
+import { usePermissions } from '../hooks/usePermissions'
+import { getEmpresas } from '../services/empresas'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 
@@ -18,12 +20,20 @@ const ROLES = [
 
 export default function UsuariosSistemaPage() {
   const { user } = useAuth()
+  const { has } = usePermissions()
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editando, setEditando] = useState(null)
   const [msg, setMsg] = useState(null)
   const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null })
+  const [empresas, setEmpresas] = useState([])
+
+  useEffect(() => {
+    getEmpresas()
+      .then(setEmpresas)
+      .catch(() => {})
+  }, [])
 
   const cargar = () => {
     setLoading(true)
@@ -84,7 +94,7 @@ export default function UsuariosSistemaPage() {
     })
   }
 
-  if (user?.rol !== 'admin') {
+  if (!has('user_management')) {
     return (
       <div className="p-8 text-center text-mgd-100 opacity-60">
         Solo los administradores pueden gestionar usuarios del sistema.
@@ -134,6 +144,7 @@ export default function UsuariosSistemaPage() {
                 <th className="text-left px-4 py-3 text-mgd-100 opacity-60 font-medium">Usuario</th>
                 <th className="text-left px-4 py-3 text-mgd-100 opacity-60 font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-mgd-100 opacity-60 font-medium">Rol</th>
+                <th className="text-left px-4 py-3 text-mgd-100 opacity-60 font-medium">Empresa</th>
                 <th className="text-left px-4 py-3 text-mgd-100 opacity-60 font-medium">Estado</th>
                 <th className="text-right px-4 py-3 text-mgd-100 opacity-60 font-medium">Acciones</th>
               </tr>
@@ -155,6 +166,9 @@ export default function UsuariosSistemaPage() {
                     >
                       {ROLES.find((r) => r.value === u.rol)?.label || u.rol}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-mgd-100 text-xs">
+                    {u.empresa_id ? empresas.find((e) => e.id === u.empresa_id)?.nombre || u.empresa_id : 'Todas'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs ${u.activo ? 'text-green-400' : 'text-red-400'}`}>
@@ -233,8 +247,16 @@ function FormUsuario({ usuario, onSubmit, onCancel }) {
     email: usuario?.email || '',
     rol: usuario?.rol || 'operador',
     activo: usuario?.activo ?? true,
+    empresa_id: usuario?.empresa_id ?? '',
   })
   const [error, setError] = useState('')
+  const [empresas, setEmpresas] = useState([])
+
+  useEffect(() => {
+    getEmpresas()
+      .then(setEmpresas)
+      .catch(() => {})
+  }, [])
 
   const campo = (key, val) => setForm((f) => ({ ...f, [key]: val }))
 
@@ -251,6 +273,7 @@ function FormUsuario({ usuario, onSubmit, onCancel }) {
     }
     const data = { ...form }
     if (usuario && !data.password) delete data.password
+    data.empresa_id = data.empresa_id === '' || data.empresa_id == null ? null : Number(data.empresa_id)
     onSubmit(data)
   }
 
@@ -315,6 +338,22 @@ function FormUsuario({ usuario, onSubmit, onCancel }) {
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>
               {r.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-mgd-100 mb-1">Empresa</label>
+        <select
+          value={form.empresa_id === null ? '' : form.empresa_id}
+          onChange={(e) => campo('empresa_id', e.target.value === '' ? '' : e.target.value)}
+          className="w-full px-3 py-2 bg-mgd-800 border border-mgd-600 rounded-lg text-white text-sm"
+        >
+          <option value="">Todas las empresas (superusuario)</option>
+          {empresas.map((emp) => (
+            <option key={emp.id} value={emp.id}>
+              {emp.nombre}
             </option>
           ))}
         </select>

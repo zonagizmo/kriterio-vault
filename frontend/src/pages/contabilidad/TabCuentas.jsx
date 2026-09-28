@@ -4,8 +4,10 @@ import ConfirmModal from '../../components/ConfirmModal'
 import Paginacion from '../../components/Paginacion'
 import { getCuentas, createCuenta, updateCuenta, deleteCuenta } from '../../services/contabilidad'
 import { EUR } from './utils'
+import { usePermissions } from '../../hooks/usePermissions'
 
 export default function TabCuentas({ empresa, onIrAMayor }) {
+  const { has } = usePermissions()
   const [q, setQ] = useState('')
   const [qVal, setQVal] = useState('')
   const [soloConSaldo, setSoloConSaldo] = useState(false)
@@ -104,9 +106,11 @@ export default function TabCuentas({ empresa, onIrAMayor }) {
           Solo con saldo
         </label>
         <span className="text-sm text-gray-500 flex-1 self-center">{total} cuentas</span>
-        <button className="btn btn-primary" onClick={abrirNuevo}>
-          + Nueva cuenta
-        </button>
+        {has('create') && (
+          <button className="btn btn-primary" onClick={abrirNuevo}>
+            + Nueva cuenta
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -162,12 +166,16 @@ export default function TabCuentas({ empresa, onIrAMayor }) {
                         → Mayor
                       </button>
                     )}
-                    <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(c)}>
-                      Editar
-                    </button>
-                    <button className="btn btn-danger text-xs" onClick={() => eliminar(c)}>
-                      Eliminar
-                    </button>
+                    {has('update') && (
+                      <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(c)}>
+                        Editar
+                      </button>
+                    )}
+                    {has('delete') && (
+                      <button className="btn btn-danger text-xs" onClick={() => eliminar(c)}>
+                        Eliminar
+                      </button>
+                    )}
                   </td>
                 </tr>
               )

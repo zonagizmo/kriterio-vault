@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import Paginacion from '../components/Paginacion'
@@ -21,6 +22,7 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
   const [confirmState, setConfirmState] = useState({ open: false, msg: '', action: null })
+  const { has } = usePermissions()
 
   const abrirNuevo = () => {
     setForm({ nombre: '', sucursal: '', numcta: '', cuenta: '', notas: '', saldoini: 0 })
@@ -82,9 +84,11 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <button className="btn btn-primary" onClick={abrirNuevo}>
-          + Nueva cuenta
-        </button>
+        {has('create') && (
+          <button className="btn btn-primary" onClick={abrirNuevo}>
+            + Nueva cuenta
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -134,12 +138,16 @@ function TabCuentas({ empresa, bancos, reload, onVerMovimientos }) {
                   <button className="btn btn-secondary text-xs mr-2" onClick={() => onVerMovimientos(b.numero)}>
                     Movimientos
                   </button>
-                  <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(b)}>
-                    Editar
-                  </button>
-                  <button className="btn btn-danger text-xs" onClick={() => eliminar(b)}>
-                    Eliminar
-                  </button>
+                  {has('update') && (
+                    <button className="btn btn-secondary text-xs mr-2" onClick={() => abrirEditar(b)}>
+                      Editar
+                    </button>
+                  )}
+                  {has('delete') && (
+                    <button className="btn btn-danger text-xs" onClick={() => eliminar(b)}>
+                      Eliminar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -252,6 +260,7 @@ function TabVencimientos({ empresa }) {
   const [skip, setSkip] = useState(0)
   const [limit, setLimit] = useState(50)
   const [editando, setEditando] = useState(null)
+  const { has } = usePermissions()
   const [form, setForm] = useState({})
 
   const cargar = useCallback(async () => {
@@ -370,9 +379,11 @@ function TabVencimientos({ empresa }) {
                   {EUR(v.pendiente)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(v)}>
-                    Editar
-                  </button>
+                  {has('update') && (
+                    <button className="btn btn-secondary text-xs" onClick={() => abrirEditar(v)}>
+                      Editar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

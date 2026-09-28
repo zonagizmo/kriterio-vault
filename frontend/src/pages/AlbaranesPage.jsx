@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   getAlbaranesEmi,
   createAlbaranEmi,
@@ -25,6 +26,7 @@ const VACIO_EMI = { fecha: HOY, cliente: '', cnumalt: '', notas: '', estado: 'P'
 const VACIO_REC = { fecha: HOY, proveedor: '', pralbaran: '', prfecha: '', notas: '', estado: 'P' }
 
 function TablaDocumentos({ items, total, skip, limit, onSkip, onLimitChange, onEditar, onEliminar, esEmitido }) {
+  const { has } = usePermissions()
   return (
     <div className="card">
       <div>
@@ -80,12 +82,14 @@ function TablaDocumentos({ items, total, skip, limit, onSkip, onLimitChange, onE
                     >
                       Ver
                     </button>
-                    <button
-                      onClick={() => onEliminar(alb.id, alb.numero)}
-                      className="text-red-500 hover:text-red-700 text-xs font-medium"
-                    >
-                      Borrar
-                    </button>
+                    {has('delete') && (
+                      <button
+                        onClick={() => onEliminar(alb.id, alb.numero)}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        Borrar
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -100,6 +104,7 @@ function TablaDocumentos({ items, total, skip, limit, onSkip, onLimitChange, onE
 
 export default function AlbaranesPage() {
   const { empresa } = useEmpresa()
+  const { has } = usePermissions()
   const [tab, setTab] = useState('emitidos')
   const esEmi = tab === 'emitidos'
 
@@ -219,9 +224,11 @@ export default function AlbaranesPage() {
             <h1 className="text-2xl font-bold text-gray-900">Albaranes</h1>
             <p className="text-sm text-gray-500">{empresa.nombre}</p>
           </div>
-          <button onClick={abrirNuevo} className="btn-primary">
-            + Nuevo albarán
-          </button>
+          {has('create') && (
+            <button onClick={abrirNuevo} className="btn-primary">
+              + Nuevo albarán
+            </button>
+          )}
         </div>
 
         <div className="flex gap-1 mb-3 border-b">

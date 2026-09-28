@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import BotonApagar from './BotonApagar'
 import { VERSION_DISPLAY } from '../version'
 
@@ -17,12 +18,13 @@ const nav = [
   { to: '/contabilidad', label: 'Contabilidad', icon: '📊' },
   { to: '/ingresos-gastos', label: 'Ingresos y Gastos', icon: '💶' },
   { to: '/estadisticas', label: 'Estadísticas', icon: '📈' },
-  { to: '/ajustes', label: 'Ajustes', icon: '⚙️' },
+  { to: '/ajustes', label: 'Ajustes', icon: '⚙️', perm: 'configuration' },
 ]
 
 export default function Layout({ children }) {
   const { empresa, setEmpresa } = useEmpresa()
   const { user, logout } = useAuth()
+  const { has } = usePermissions()
   const navigate = useNavigate()
 
   function cambiarEmpresa() {
@@ -57,38 +59,40 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* Navegación */}
+        {/* Navegación (filtrada por permisos del rol) */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {nav.map(({ to, label, icon, disabled }) =>
-            disabled ? (
-              <div
-                key={to}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-mgd-100 opacity-30 text-sm cursor-not-allowed select-none"
-              >
-                <span>{icon}</span>
-                <span>{label}</span>
-                <span className="ml-auto text-xs">pronto</span>
-              </div>
-            ) : (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/inicio'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    isActive ? 'bg-mgd-600 text-white font-medium' : 'text-mgd-100 hover:bg-mgd-800'
-                  }`
-                }
-              >
-                <span>{icon}</span>
-                <span>{label}</span>
-              </NavLink>
-            ),
-          )}
+          {nav
+            .filter(({ perm }) => !perm || has(perm))
+            .map(({ to, label, icon, disabled }) =>
+              disabled ? (
+                <div
+                  key={to}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-mgd-100 opacity-30 text-sm cursor-not-allowed select-none"
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                  <span className="ml-auto text-xs">pronto</span>
+                </div>
+              ) : (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/inicio'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      isActive ? 'bg-mgd-600 text-white font-medium' : 'text-mgd-100 hover:bg-mgd-800'
+                    }`
+                  }
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                </NavLink>
+              ),
+            )}
         </nav>
 
         {/* Link admin: usuarios del sistema */}
-        {user?.rol === 'admin' && (
+        {has('user_management') && (
           <div className="px-2 pb-1">
             <NavLink
               to="/usuarios-sistema"

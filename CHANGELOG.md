@@ -5,6 +5,39 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.00] — 2026-09-28 — Autorización RBAC completa: admin / operador / solo_lectura
+
+### Añadido
+- **`backend/app/services/permissions.py`** — política centralizada RBAC: catálogo `PERMISOS`, matriz `ROLE_PERMISSIONS` (única fuente de verdad), dependencias `require_read/create/update/delete/write/admin/backup/restore/user_management/configuration/sync`, `require_method_permission` (GET→read, POST→create, PUT/PATCH→update, DELETE→delete), y utilidades multiempresa `puede_ver_empresa`, `empresa_query`, `exigir_empresa`.
+- **401/403/404 explícitos**: 401 = no autenticado (incluye login de usuario inactivo — justificado en §16 —, token inválido/expirado/firmado con otra clave o rol cambiado en BD); 403 = sin permiso; 404 = recurso inexistente **o de otra empresa** (sin revelar su existencia).
+- **Aislamiento multiempresa**: `empresa_query` en todos los listados con `empresa_id` y `exigir_empresa` (comprobación **antes** de leer o escribir) en detalle/alta/baja de clientes, proveedores, artículos, familias, facturas, albaranes, extras, bancos, contabilidad, usuarios NNA/pagas y empresas.
+- **`UsuarioSistema.empresa_id`** (FK nullable): `NULL` = todas las empresas (superusuario, compatibilidad con usuarios existentes); migración en arranque que también normaliza roles `NULL`/inválidos a `operador` (§23, nunca admin).
+- **Tests**: `tests/test_roles_permisos.py` con **59 tests** (401 ×6, 403 solo_lectura, operador CRUD + 403 admin, admin, 404 multiempresa cruzados). Suite completa: **160 passed**.
+- **`SECURITY.md`** — documento de política: cadena de decisión, matriz Rol×Permiso, clasificación de los 135 endpoints, multiempresa, JWT, reflejo en frontend y pruebas.
+- **Frontend — permisos centralizados**: `services/permissions.js` (espejo de la matriz) + `hooks/usePermissions.js`.
+- **`<RequierePermiso>`** en `App.jsx`: rutas `/ajustes` (`configuration`) y `/usuarios-sistema` (`user_management`) redirigen a `/inicio` sin permiso.
+- **Control de escritura en UI**: controles de alta/edición/borrado condicionados con `has()` en `CrudPage` (clientes, proveedores), Albaranes, Artículos, Bancos (+vencimientos), Extras, Facturas (+renumerar), Movimientos de banco (nuevo, editar, borrar, conciliar, reordenar), Usuarios NNA (+baja) y pagas (registrar mes, paga individual, borrar), contabilidad (cuentas, asientos, generar pendientes, conciliación) y navegación filtrada (`Ajustes`, `Usuarios del sistema`, botón de apagado, alta de empresas).
+
+### Modificado
+- **12 routers CRUD** con `dependencies=[Depends(require_method_permission)]`; escrituras de ajustes/backups/empresas con permisos explícitos (`backup`, `restore`, `configuration`), `/sync/ejecutar` → `sync`, `/api/shutdown` y `/contabilidad/diagnostico` → `admin`.
+- **JWT**: única variable `JWT_SECRET_KEY` (eliminado el secreto por defecto conocido); si falta, clave efímera por proceso + `RuntimeWarning`. `.env.example` y `deploy/aprovisionar_servidor.sh` actualizados (generan/migran la clave).
+- **`GET /api/empresas`** con filtro por empresa del usuario (con empresa asignada solo ve la suya); escrituras de empresa → `configuration`.
+- **`scripts/create_admin.py`**: sin contraseña fija (`ADMIN_PASSWORD` o `getpass`), `--username/--rol/--empresa-id`.
+- **`POST /auth/login`**: usuario inactivo devuelve **401** (antes 403); `login`/`GET /me` devuelven ahora `activo` y `empresa_id`.
+- **Frontend**: `BotonApagar` no se renderiza sin permiso `admin`; `EmpresasSelectorPage` (alta/baja de empresas) solo con `configuration`; `UsuariosSistemaPage` con guard por permiso **y selector de `empresa_id`** en el formulario (alta de usuarios restringida a una empresa o a todas).
+
+### Verificación
+- Backend: `KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q` → **160 passed** (101 existentes + 59 nuevos); `python -m compileall` OK.
+- Frontend: `npm run lint` → **exit 0 (0 errores)**, `npm run format:check` OK, `vite build` OK (147 módulos).
+- Documentación: `SECURITY.md` nuevo; esta entrada; `RECOMENDACIONES.md` actualizado.
+
+### Impacto
+- **Base de datos**: 1 columna nueva (`usuarios_sistema.empresa_id`, nullable → migración compatible) + índice; roles existentes normalizados a `operador` si eran inválidos.
+- **API**: cambio de semántica de error (403→401 en login inactivo; 404 en cruces de empresa). Clientes existentes solo notan la exigencia de permisos para roles no admin.
+- **UI**: `solo_lectura` ya no ve botones de escritura; rutas y controles administrativos ocultos a no-admin.
+
+---
+
 ## [1.12.03] — 2026-09-28 — ESLint en verde: 18 problemas corregidos en código
 
 ### Corregido

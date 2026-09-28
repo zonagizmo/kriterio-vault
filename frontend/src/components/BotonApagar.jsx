@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import api from '../services/api'
+import { usePermissions } from '../hooks/usePermissions'
 
 export default function BotonApagar({ variant = 'sidebar' }) {
+  const { has } = usePermissions()
   const [confirmando, setConfirmando] = useState(false)
   const [apagando, setApagando] = useState(false)
+
+  // Apagar el servidor es una operación administrativa (el backend exige
+  // permiso admin): no se muestra a operador ni a solo_lectura.
+  if (!has('admin')) return null
 
   async function apagar() {
     setApagando(true)

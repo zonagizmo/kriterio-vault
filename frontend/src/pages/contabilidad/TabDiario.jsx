@@ -3,6 +3,7 @@ import Modal from '../../components/Modal'
 import ConfirmModal from '../../components/ConfirmModal'
 import Paginacion from '../../components/Paginacion'
 import AutocompleteCuenta from '../../components/AutocompleteCuenta'
+import { usePermissions } from '../../hooks/usePermissions'
 import {
   getAsientos,
   createAsiento,
@@ -28,6 +29,7 @@ const TIPOS_ASIENTO = [
 ]
 
 function FilaAsiento({ asiento, _empresa, onDelete, onEdit }) {
+  const { has } = usePermissions()
   const [abierto, setAbierto] = useState(false)
 
   const cuadrado = asiento.cuadrado
@@ -55,24 +57,28 @@ function FilaAsiento({ asiento, _empresa, onDelete, onEdit }) {
         </td>
         <td className="px-4 py-2.5 text-right">
           <span className="text-gray-400 text-xs mr-2">{asiento.lineas.length} líneas</span>
-          <button
-            className="btn btn-secondary text-xs mr-1"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit(asiento)
-            }}
-          >
-            Editar
-          </button>
-          <button
-            className="btn btn-danger text-xs"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(asiento)
-            }}
-          >
-            Eliminar
-          </button>
+          {has('update') && (
+            <button
+              className="btn btn-secondary text-xs mr-1"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(asiento)
+              }}
+            >
+              Editar
+            </button>
+          )}
+          {has('delete') && (
+            <button
+              className="btn btn-danger text-xs"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(asiento)
+              }}
+            >
+              Eliminar
+            </button>
+          )}
         </td>
       </tr>
       {abierto && (
@@ -296,6 +302,7 @@ function AsientoModal({ empresa, onClose, onGuardado, asientoEditar = null }) {
 }
 
 export default function TabDiario({ empresa }) {
+  const { has } = usePermissions()
   const [fechaDesde, setFechaDesde] = useState(`${anioActual}-01-01`)
   const [fechaHasta, setFechaHasta] = useState(hoy())
   const [cuentaFiltro, setCuentaFiltro] = useState('')
@@ -411,9 +418,11 @@ export default function TabDiario({ empresa }) {
           </select>
         </div>
         <span className="text-sm text-gray-500 flex-1 self-end pb-2">{total} asientos</span>
-        <button className="btn btn-secondary self-end" onClick={generarTodos} disabled={generando}>
-          {generando ? 'Generando...' : 'Generar pendientes'}
-        </button>
+        {has('create') && (
+          <button className="btn btn-secondary self-end" onClick={generarTodos} disabled={generando}>
+            {generando ? 'Generando...' : 'Generar pendientes'}
+          </button>
+        )}
         <button
           className="btn btn-secondary self-end"
           onClick={() =>
@@ -422,9 +431,11 @@ export default function TabDiario({ empresa }) {
         >
           Exportar CSV
         </button>
-        <button className="btn btn-primary self-end" onClick={() => setModalNuevo(true)}>
-          + Nuevo asiento
-        </button>
+        {has('create') && (
+          <button className="btn btn-primary self-end" onClick={() => setModalNuevo(true)}>
+            + Nuevo asiento
+          </button>
+        )}
       </div>
 
       <div className="card">

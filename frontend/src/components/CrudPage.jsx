@@ -1,4 +1,5 @@
 import { useEmpresa } from '../hooks/useEmpresa.jsx'
+import { usePermissions } from '../hooks/usePermissions'
 import Modal from './Modal'
 import Paginacion from './Paginacion'
 import useCrud from '../hooks/useCrud'
@@ -94,11 +95,14 @@ export default function CrudPage({
   const editId = crud.editId
   const guardando = crud.guardando
   const _cargar = crud.cargar
-  const abrirNuevo = crud.abrirNuevo
-  const abrirEditar = crud.abrirEditar
+  // Reflejo de permisos: sin create/update/delete no se muestran los
+  // controles de escritura (el backend devuelve 403 igualmente).
+  const { has } = usePermissions()
+  const abrirNuevo = has('create') ? crud.abrirNuevo : null
+  const abrirEditar = has('update') ? crud.abrirEditar : null
   const cerrar = crud.cerrar
   const guardar = crud.guardar
-  const eliminar = crud.eliminar
+  const eliminar = has('delete') ? crud.eliminar : null
 
   if (!empresa) {
     return <div className="p-8 text-center text-gray-400">Selecciona una empresa para ver {titulo.toLowerCase()}.</div>
