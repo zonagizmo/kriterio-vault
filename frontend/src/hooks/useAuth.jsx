@@ -1,18 +1,10 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { isAuthenticated, getUsuario, login as authLogin, logout as authLogout } from '../services/auth'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (isAuthenticated()) {
-      setUser(getUsuario())
-    }
-    setLoading(false)
-  }, [])
+  const [user, setUser] = useState(() => (isAuthenticated() ? getUsuario() : null))
 
   const login = async (username, password) => {
     const data = await authLogin(username, password)
@@ -23,14 +15,6 @@ export function AuthProvider({ children }) {
   const logout = () => {
     authLogout()
     setUser(null)
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-mgd-900 flex items-center justify-center">
-        <div className="text-mgd-100 opacity-60">Cargando...</div>
-      </div>
-    )
   }
 
   return (

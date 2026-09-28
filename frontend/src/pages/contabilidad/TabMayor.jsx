@@ -375,13 +375,16 @@ export default function TabMayor({ empresa, cuentaInicial = '' }) {
 
   useEffect(() => {
     if (cuentaInicial) buscar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  let saldoAcum = Number(saldoAnterior || 0)
-  const lineasConSaldo = lineas.map((l) => {
-    saldoAcum = saldoAcum + Number(l.importe || 0)
-    return { ...l, saldoAcum: saldoAcum }
-  })
+  const lineasConSaldo = lineas.reduce((acc, l) => {
+    const prev = acc.length > 0 ? acc[acc.length - 1].saldoAcum : Number(saldoAnterior || 0)
+    acc.push({ ...l, saldoAcum: prev + Number(l.importe || 0) })
+    return acc
+  }, [])
+  const saldoFinal =
+    lineasConSaldo.length > 0 ? lineasConSaldo[lineasConSaldo.length - 1].saldoAcum : Number(saldoAnterior || 0)
 
   const totalDebe = lineas.reduce((s, l) => s + (Number(l.importe) > 0 ? Number(l.importe) : 0), 0)
   const totalHaber = lineas.reduce((s, l) => s + (Number(l.importe) < 0 ? Math.abs(Number(l.importe)) : 0), 0)
@@ -492,9 +495,9 @@ export default function TabMayor({ empresa, cuentaInicial = '' }) {
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{EUR(totalDebe)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-red-600">{EUR(totalHaber)}</td>
                     <td
-                      className={`px-4 py-2.5 text-right font-mono text-xs font-bold ${saldoAcum < 0 ? 'text-red-600' : 'text-gray-900'}`}
+                      className={`px-4 py-2.5 text-right font-mono text-xs font-bold ${saldoFinal < 0 ? 'text-red-600' : 'text-gray-900'}`}
                     >
-                      {EUR(saldoAcum)}
+                      {EUR(saldoFinal)}
                     </td>
                   </tr>
                 </tfoot>

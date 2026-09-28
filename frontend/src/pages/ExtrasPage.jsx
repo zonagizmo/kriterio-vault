@@ -45,13 +45,21 @@ const mapApunteFromApi = (a) => ({
 const apunteVacio = (dh = 'D') => ({ cuenta: '', ayuda: '', dh, importe: '', declterc: '' })
 
 // ── Fila de apunte contable con autocomplete cuenta↔descripción ───────────────
-function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
+function FilaApunte({ apunte, onChange, onRemove, empresaId, isLast, justAddedRef }) {
   const [resultados, setResultados] = useState([])
   const [foco, setFoco] = useState(null) // 'cuenta' | 'ayuda'
   const [highlighted, setHighlighted] = useState(-1)
   const trRef = useRef(null)
   const listRef = useRef(null)
   const timerRef = useRef(null)
+  const cuentaRef = useRef(null)
+
+  useEffect(() => {
+    if (isLast && justAddedRef?.current && cuentaRef.current) {
+      justAddedRef.current = false
+      cuentaRef.current.focus()
+    }
+  }, [isLast, justAddedRef])
 
   useEffect(() => {
     if (highlighted >= 0 && listRef.current) {
@@ -139,9 +147,7 @@ function FilaApunte({ apunte, onChange, onRemove, empresaId, focusCuenta }) {
     <tr ref={trRef} className="border-b border-gray-50 last:border-0">
       <td className="py-1.5 pr-2 relative">
         <input
-          ref={(el) => {
-            if (el && focusCuenta) el.focus()
-          }}
+          ref={cuentaRef}
           className="input text-sm font-mono"
           placeholder="570.0.000"
           value={apunte.cuenta}
@@ -733,21 +739,17 @@ export default function ExtrasPage() {
                 </tr>
               </thead>
               <tbody>
-                {apuntes.map((a, i) => {
-                  const esUltima = i === apuntes.length - 1
-                  const foco = esUltima && justAddedLine.current
-                  if (foco) justAddedLine.current = false
-                  return (
-                    <FilaApunte
-                      key={i}
-                      apunte={a}
-                      onChange={(newA) => setApunte(i, newA)}
-                      onRemove={() => removeApunte(i)}
-                      empresaId={empresa?.id}
-                      focusCuenta={foco}
-                    />
-                  )
-                })}
+                {apuntes.map((a, i) => (
+                  <FilaApunte
+                    key={i}
+                    apunte={a}
+                    onChange={(newA) => setApunte(i, newA)}
+                    onRemove={() => removeApunte(i)}
+                    empresaId={empresa?.id}
+                    isLast={i === apuntes.length - 1}
+                    justAddedRef={justAddedLine}
+                  />
+                ))}
               </tbody>
             </table>
           </div>

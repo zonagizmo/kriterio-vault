@@ -241,8 +241,8 @@ export default function TabDiagnostico({ empresa }) {
 
       {!data && !cargando && (
         <p className="text-sm text-gray-400">
-          Pulsa &quot;Analizar contabilidad&quot; para detectar posibles inconsistencias: extras sin asiento, movimientos
-          bancarios pendientes y cuentas de proveedor desequilibradas.
+          Pulsa &quot;Analizar contabilidad&quot; para detectar posibles inconsistencias: extras sin asiento,
+          movimientos bancarios pendientes y cuentas de proveedor desequilibradas.
         </p>
       )}
 

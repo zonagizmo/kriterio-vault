@@ -23,6 +23,7 @@
     "eqeqeq": ["error", "smart"],
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["error"] }],
-    "react/prop-types": "off"
+    "react/prop-types": "off",
+    "react-hooks/set-state-in-effect": "warn"
   }
 }

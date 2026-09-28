@@ -2,6 +2,53 @@ import { useState } from 'react'
 import { getPyG, exportarCSV } from '../../services/contabilidad'
 import { EUR, anioActual } from './utils'
 
+const Seccion = ({ titulo, filas, totalLabel, total, colorTotal }) => (
+  <div className="mb-4">
+    <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700 text-sm uppercase tracking-wide rounded-t-lg border border-gray-200">
+      {titulo}
+    </div>
+    <div className="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase w-28">Cuenta</th>
+            <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">Descripción</th>
+            <th className="px-4 py-2 text-right text-xs text-gray-500 uppercase">Importe</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {filas.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="px-4 py-4 text-center text-gray-400 text-xs">
+                Sin movimientos
+              </td>
+            </tr>
+          ) : (
+            filas.map((f) => {
+              const imp = f.importe ?? (f.saldo_deudor > 0 ? f.saldo_deudor : f.saldo_acreedor)
+              return (
+                <tr key={f.cuenta} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 font-mono text-gray-800">{f.cuenta}</td>
+                  <td className="px-4 py-2 text-gray-600 text-xs">{f.texto}</td>
+                  <td className="px-4 py-2 text-right font-mono text-xs">{EUR(imp)}</td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+        <tfoot className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+          <tr>
+            <td colSpan={2} className="px-4 py-2.5 text-gray-700 text-sm">
+              {totalLabel}
+            </td>
+            <td className={`px-4 py-2.5 text-right font-mono text-sm ${colorTotal}`}>{EUR(Math.abs(total))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+)
+
 export default function TabPyG({ empresa }) {
   const [fechaDesde, setFechaDesde] = useState(`${anioActual}-01-01`)
   const [fechaHasta, setFechaHasta] = useState(`${anioActual}-12-31`)
@@ -20,53 +67,6 @@ export default function TabPyG({ empresa }) {
       setCargando(false)
     }
   }
-
-  const Seccion = ({ titulo, filas, totalLabel, total, colorTotal }) => (
-    <div className="mb-4">
-      <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700 text-sm uppercase tracking-wide rounded-t-lg border border-gray-200">
-        {titulo}
-      </div>
-      <div className="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase w-28">Cuenta</th>
-              <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">Descripción</th>
-              <th className="px-4 py-2 text-right text-xs text-gray-500 uppercase">Importe</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filas.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-4 py-4 text-center text-gray-400 text-xs">
-                  Sin movimientos
-                </td>
-              </tr>
-            ) : (
-              filas.map((f) => {
-                const imp = f.importe ?? (f.saldo_deudor > 0 ? f.saldo_deudor : f.saldo_acreedor)
-                return (
-                  <tr key={f.cuenta} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-gray-800">{f.cuenta}</td>
-                    <td className="px-4 py-2 text-gray-600 text-xs">{f.texto}</td>
-                    <td className="px-4 py-2 text-right font-mono text-xs">{EUR(imp)}</td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-          <tfoot className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-            <tr>
-              <td colSpan={2} className="px-4 py-2.5 text-gray-700 text-sm">
-                {totalLabel}
-              </td>
-              <td className={`px-4 py-2.5 text-right font-mono text-sm ${colorTotal}`}>{EUR(Math.abs(total))}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  )
 
   return (
     <div>

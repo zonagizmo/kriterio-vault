@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 /**
  * Hook genérico para páginas CRUD con tabla + paginación + modal de edición.
@@ -34,12 +34,19 @@ export default function useCrud({
   const [editId, setEditId] = useState(null)
   const [guardando, setGuardando] = useState(false)
 
+  const extraParamsRef = useRef(extraParams)
+  useEffect(() => {
+    extraParamsRef.current = extraParams
+  })
+  const extraDepsKey = JSON.stringify(extraDeps)
+
   const cargar = useCallback(async () => {
     if (!empresaId) return
     setCargando(true)
     setError(null)
     try {
-      const params = { q, skip, limit, ...(extraParams ? extraParams() : {}) }
+      const extra = extraParamsRef.current
+      const params = { q, skip, limit, ...(extra ? extra() : {}) }
       const res = await service.getAll(empresaId, params)
       setDatos(res)
     } catch (e) {
@@ -47,14 +54,15 @@ export default function useCrud({
     } finally {
       setCargando(false)
     }
-  }, [service, empresaId, q, skip, limit, ...extraDeps])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- extraDepsKey es la señal de recarga
+  }, [service, empresaId, q, skip, limit, extraDepsKey])
 
   useEffect(() => {
     cargar()
   }, [cargar])
   useEffect(() => {
     setSkip(0)
-  }, [q, empresaId, ...extraDeps])
+  }, [q, empresaId, extraDepsKey])
 
   const abrirNuevo = () => {
     setForm(emptyForm)

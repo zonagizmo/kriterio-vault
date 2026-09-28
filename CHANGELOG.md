@@ -5,6 +5,30 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.12.03] — 2026-09-28 — ESLint en verde: 18 problemas corregidos en código
+
+### Corregido
+- **`react-hooks/static-components` (7)** — `SeccionBalance` (`TabBalance.jsx`) y `Seccion` (`TabPyG.jsx`) se declaraban dentro del componente y se recreaban en cada render; izados a nivel de módulo.
+- **`react-hooks/refs` (1)** — `ExtrasPage.jsx` leía y reescribía `justAddedLine.current` **durante el render** para enfocar la línea recién añadida. Ahora el padre solo lo activa en el handler `addApunte` y `FilaApunte` consume el flag en un `useEffect` con un `useRef` al input: mismo comportamiento (una sola vez, solo al añadir), sin acceso a refs en render.
+- **`react-hooks/immutability` (1)** — `TabMayor.jsx` mutaba `saldoAcum` dentro de `.map()`; reescrito con `reduce` y `saldoFinal` para el total del pie.
+- **`react-hooks/use-memo` (1)** — `useCrud.js` usaba spread en el array de dependencias del `useCallback`; ahora clave estable `extraDepsKey` + ref para `extraParams` (además corrige el cierre obsoleto de `extraParams`).
+- **`react-hooks/exhaustive-deps` (7)** — `useCrud` (×3), `AjustesPage` (`empresaId` en vez de `empresa`), `AlbaranesPage`/`FacturasPage` (`esEmi` en deps, fuera `tab` que no se leía), `TabMayor` (disable puntual en el efecto mount-only, no se puede poner `buscar` en deps sin bucle infinito).
+- **`react-hooks/set-state-in-effect` (1)** — `useAuth.jsx` inicializa el usuario desde localStorage con inicializador perezoso de `useState`; eliminados el estado `loading` y el flash de "Cargando..." inicial.
+- **Prettier** — `TabDiagnostico.jsx` (incumplimiento pre-existente) + `TabBalance.jsx` + `TabPyG.jsx` re-formateados: `format:check` en verde.
+
+### Modificado
+- **`frontend/.eslintrc.json`** — `react-hooks/set-state-in-effect` (regla nueva de `eslint-plugin-react-hooks@7`) pasa a **`warn`**. Los 28 avisos restantes son el patrón de carga de datos de toda la app (`setCargando(true)` en el fetch + `setSkip(0)` al cambiar filtros) en ~15 páginas; refactorizarlo exige reescribir la capa de datos **sin tests de frontend** que detecten regresiones. Se mantiene visible como guía sin romper el lint.
+
+### Verificación
+- `npm run lint` → **exit 0** (0 errores, 28 avisos), `npm run format:check` OK, `vite build` OK.
+- Balance: 45 problemas iniciales → **18 corregidos en código** (7 `static-components`, 7 `exhaustive-deps`, 1 `use-memo`, 1 `refs`, 1 `immutability`, 1 `set-state-in-effect`) y 28 avisos restantes, todos `set-state-in-effect` (27 pre-existentes + 1 nuevo en `useCrud` por el refactor de dependencias).
+
+### Impacto
+- **Base de datos / API**: sin cambios.
+- **UI**: sin cambios de comportamiento (refactors equivalentes).
+
+---
+
 ## [1.12.02] — 2026-09-28 — Puerto Postgres cerrado + Node.js 14 → 22 LTS
 
 ### Corregido

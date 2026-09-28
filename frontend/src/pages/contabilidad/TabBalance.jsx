@@ -97,6 +97,43 @@ function ModalCierre({ empresa, onClose, onDone }) {
   )
 }
 
+const SeccionBalance = ({ titulo, filas, total, colorTotal, colorFondo }) => (
+  <div className="mb-3">
+    <div className={`px-4 py-2 font-semibold text-sm uppercase tracking-wide rounded-t-lg border ${colorFondo}`}>
+      {titulo}
+    </div>
+    <div className="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <tbody className="divide-y divide-gray-100">
+          {filas.length === 0 ? (
+            <tr>
+              <td colSpan={2} className="px-4 py-3 text-center text-gray-400 text-xs">
+                Sin movimientos
+              </td>
+            </tr>
+          ) : (
+            filas.map((f) => (
+              <tr key={f.cuenta} className="hover:bg-gray-50">
+                <td className="px-4 py-2 font-mono text-gray-800 w-32">{f.cuenta}</td>
+                <td className="px-4 py-2 text-gray-600 text-xs">{f.texto}</td>
+                <td className="px-4 py-2 text-right font-mono text-xs">{EUR(f.importe)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+        <tfoot className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+          <tr>
+            <td colSpan={2} className="px-4 py-2 text-gray-700 text-sm">
+              Total
+            </td>
+            <td className={`px-4 py-2 text-right font-mono text-sm ${colorTotal}`}>{EUR(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+)
+
 export default function TabBalance({ empresa }) {
   const [fechaDesde, setFechaDesde] = useState(`${anioActual - 1}-01-01`)
   const [fechaHasta, setFechaHasta] = useState(`${anioActual - 1}-12-31`)
@@ -116,43 +153,6 @@ export default function TabBalance({ empresa }) {
       setCargando(false)
     }
   }
-
-  const SeccionBalance = ({ titulo, filas, total, colorTotal, colorFondo }) => (
-    <div className="mb-3">
-      <div className={`px-4 py-2 font-semibold text-sm uppercase tracking-wide rounded-t-lg border ${colorFondo}`}>
-        {titulo}
-      </div>
-      <div className="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-gray-100">
-            {filas.length === 0 ? (
-              <tr>
-                <td colSpan={2} className="px-4 py-3 text-center text-gray-400 text-xs">
-                  Sin movimientos
-                </td>
-              </tr>
-            ) : (
-              filas.map((f) => (
-                <tr key={f.cuenta} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 font-mono text-gray-800 w-32">{f.cuenta}</td>
-                  <td className="px-4 py-2 text-gray-600 text-xs">{f.texto}</td>
-                  <td className="px-4 py-2 text-right font-mono text-xs">{EUR(f.importe)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          <tfoot className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-            <tr>
-              <td colSpan={2} className="px-4 py-2 text-gray-700 text-sm">
-                Total
-              </td>
-              <td className={`px-4 py-2 text-right font-mono text-sm ${colorTotal}`}>{EUR(total)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  )
 
   return (
     <div>

@@ -40,14 +40,16 @@ function FichaEmpresa() {
   const [guardando, setGuardando] = useState(false)
   const [msg, setMsg] = useState(null)
 
+  const empresaId = empresa?.id
+
   useEffect(() => {
-    if (!empresa) return
+    if (!empresaId) return
     setCargando(true)
-    getEmpresa(empresa.id)
+    getEmpresa(empresaId)
       .then(setForm)
       .catch(() => setMsg({ tipo: 'error', texto: 'Error al cargar los datos de la empresa' }))
       .finally(() => setCargando(false))
-  }, [empresa?.id])
+  }, [empresaId])
 
   const campo = (key, valor) => setForm((f) => ({ ...f, [key]: valor }))
 

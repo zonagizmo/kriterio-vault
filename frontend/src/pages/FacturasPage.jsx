@@ -129,7 +129,7 @@ export default function FacturasPage() {
     } finally {
       setCargando(false)
     }
-  }, [empresa, tab, q, skip, limit, filtroEntidad, fechaDesde, fechaHasta, filtroEstado])
+  }, [empresa, esEmi, q, skip, limit, filtroEntidad, fechaDesde, fechaHasta, filtroEstado])
 
   useEffect(() => {
     cargar()

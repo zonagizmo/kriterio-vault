@@ -131,7 +131,7 @@ export default function AlbaranesPage() {
     } finally {
       setCargando(false)
     }
-  }, [empresa, tab, q, skip, limit])
+  }, [empresa, esEmi, q, skip, limit])
 
   useEffect(() => {
     cargar()
