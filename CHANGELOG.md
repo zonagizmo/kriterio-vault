@@ -5,6 +5,23 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.01] — 2026-09-28 — Operador también diagnostica, repara y cierra ejercicio
+
+### Modificado
+- **`GET /api/contabilidad/diagnostico`** — de `admin` a **`read`** (`require_admin` → `require_read`): el diagnóstico es consulta y ahora el operador (y el rol de consulta) puede verlo. Los POST de reparación (`generar-pendientes`, `regenerar-asiento-banco`) y `cierre` siguen exigiendo **`create`**: el operador puede diagnosticar, reparar y cerrar ejercicio; `solo_lectura` solo consulta (403 al reparar/cerrar).
+- **Frontend — `TabDiagnostico.jsx`**: botones **"Reparar todo"** y **"Generar"** condicionados con `has('create')` (para `solo_lectura` ya no aparecen); "Analizar contabilidad" sin restricción (es `read`).
+- **Frontend — `TabBalance.jsx`**: botón **"Cierre de ejercicio"** condicionado con `has('create')` (antes `solo_lectura` lo veía y recibía 403 al confirmar).
+
+### Verificación
+- Backend: `KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q` → **166 passed** (160 + 6 nuevos: diagnóstico y cierre por rol). `compileall` OK.
+- Frontend: `npm run lint` → 0 errores, `format:check` OK, `vite build` OK.
+
+### Impacto
+- **Base de datos / API**: sin cambios de esquema; solo relajación de un permiso (`GET` diagnóstico: admin → lectura).
+- **Compatibilidad**: los clientes admin y operador no notan cambios; `solo_lectura` gana el diagnóstico y pierde los botones de reparación/cierre en UI.
+
+---
+
 ## [1.13.00] — 2026-09-28 — Autorización RBAC completa: admin / operador / solo_lectura
 
 ### Añadido

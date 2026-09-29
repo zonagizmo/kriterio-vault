@@ -86,7 +86,8 @@ Detalle por recurso:
   guardar configuración → `configuration`.
 - **`/api/sync`** — `POST /push` autenticado por **API-key de instalación**
   (mecanismo de dispositivo, no de usuario); `POST /ejecutar` → `sync`.
-- **`/api/contabilidad/diagnostico`** → `admin` (solo admin corre diagnóstico).
+- **`/api/contabilidad/diagnostico`** → `read` (desde v1.13.01: el operador
+  también diagnostica; los POST de reparación/generación/cierre exigen `create`).
 - **`POST /api/shutdown`** → `admin` + `KRITERIO_NO_SHUTDOWN=1` desactiva la
   parada real (usado por los tests).
 

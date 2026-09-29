@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { getDiagnostico, generarPendientes, regenerarAsientoBanco } from '../../services/contabilidad'
+import { usePermissions } from '../../hooks/usePermissions'
 import { EUR, fmtFecha } from './utils'
 import ConfirmModal from '../../components/ConfirmModal'
 
 export default function TabDiagnostico({ empresa }) {
+  const { has } = usePermissions()
   const [data, setData] = useState(null)
   const [cargando, setCargando] = useState(false)
   const [reparando, setReparando] = useState(false)
@@ -66,7 +68,7 @@ export default function TabDiagnostico({ empresa }) {
             ✓ Sin problemas detectados
           </span>
         )}
-        {data && total > 0 && (
+        {data && total > 0 && has('create') && (
           <button className="btn btn-warning" onClick={reparar} disabled={reparando}>
             {reparando ? 'Reparando...' : `Reparar todo (${total} problemas)`}
           </button>
@@ -176,13 +178,15 @@ export default function TabDiagnostico({ empresa }) {
                         </td>
                         <td className="px-3 py-1.5 text-right font-mono">{EUR(m.total)}</td>
                         <td className="px-3 py-1.5 text-right">
-                          <button
-                            className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                            onClick={() => regenerarMov(m.banco, m.numero)}
-                            disabled={info === 'generando...'}
-                          >
-                            Generar
-                          </button>
+                          {has('create') && (
+                            <button
+                              className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              onClick={() => regenerarMov(m.banco, m.numero)}
+                              disabled={info === 'generando...'}
+                            >
+                              Generar
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )

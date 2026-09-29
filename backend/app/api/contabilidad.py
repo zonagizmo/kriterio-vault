@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.auth import get_current_user
-from app.services.permissions import require_method_permission, empresa_query, exigir_empresa, require_admin
+from app.services.permissions import require_method_permission, empresa_query, exigir_empresa, require_read
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
@@ -129,7 +129,7 @@ def eliminar_asiento(asiento_num: int, empresa_id: int = Depends(empresa_query),
 # ─── Libro mayor ─────────────────────────────────────────────────────────────
 
 @router.get("/diagnostico", response_model=dict)
-def diagnostico_contable(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def diagnostico_contable(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db), _user=Depends(require_read)):
     return svc.get_diagnostico(db, empresa_id)
 
 

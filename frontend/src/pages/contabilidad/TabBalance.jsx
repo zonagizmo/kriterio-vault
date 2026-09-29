@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from '../../components/Modal'
 import ConfirmModal from '../../components/ConfirmModal'
 import { getBalance, realizarCierre, exportarCSV } from '../../services/contabilidad'
+import { usePermissions } from '../../hooks/usePermissions'
 import { EUR, anioActual } from './utils'
 
 function ModalCierre({ empresa, onClose, onDone }) {
@@ -135,6 +136,7 @@ const SeccionBalance = ({ titulo, filas, total, colorTotal, colorFondo }) => (
 )
 
 export default function TabBalance({ empresa }) {
+  const { has } = usePermissions()
   const [fechaDesde, setFechaDesde] = useState(`${anioActual - 1}-01-01`)
   const [fechaHasta, setFechaHasta] = useState(`${anioActual - 1}-12-31`)
   const [data, setData] = useState(null)
@@ -178,12 +180,14 @@ export default function TabBalance({ empresa }) {
             Exportar CSV
           </button>
         )}
-        <button
-          className="btn self-end bg-amber-600 hover:bg-amber-700 text-white"
-          onClick={() => setModalCierre(true)}
-        >
-          Cierre de ejercicio
-        </button>
+        {has('create') && (
+          <button
+            className="btn self-end bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={() => setModalCierre(true)}
+          >
+            Cierre de ejercicio
+          </button>
+        )}
       </div>
 
       {data && (

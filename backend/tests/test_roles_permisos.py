@@ -97,7 +97,6 @@ class TestSoloLectura:
         ("post", "/api/shutdown", None),
         ("post", "/api/sync/ejecutar", None),
         ("post", "/api/empresas", {"codigo": "Z1", "nombre": "Z"}),
-        ("get", "/api/contabilidad/diagnostico", None),
     ])
     def test_admin_403(self, client, solo_lectura_token, method, path, payload):
         r = client.request(method, path, json=payload, headers=h(solo_lectura_token))
@@ -145,7 +144,6 @@ class TestOperador:
         ("post", "/api/sync/ejecutar", None),
         ("post", "/api/empresas", {"codigo": "Z2", "nombre": "Z"}),
         ("delete", "/api/empresas/1", None),
-        ("get", "/api/contabilidad/diagnostico", None),
     ])
     def test_admin_403(self, client, operador_token, method, path, payload):
         r = client.request(method, path, json=payload, headers=h(operador_token))
@@ -157,6 +155,48 @@ class TestOperador:
         assert r.status_code == 403
         db_session.refresh(operador_user)
         assert operador_user.rol == "operador"
+
+
+# ─── Contabilidad: diagnóstico y cierre (decisión v1.13.01) ───────────────────
+# El diagnóstico pasa de solo-admin a lectura (GET) y los botones de
+# reparación/generación/cierre siguen exigiendo create: el operador puede
+# diagnosticar, reparar y cerrar ejercicio; solo_lectura solo mira.
+
+class TestContabilidadDiagnosticoYCierre:
+    def test_operador_diagnostica(self, client, operador_token):
+        r = client.get("/api/contabilidad/diagnostico",
+                       params={"empresa_id": 1}, headers=h(operador_token))
+        assert r.status_code == 200
+
+    def test_solo_lectura_diagnostica(self, client, solo_lectura_token):
+        """GET = read: también el rol de consulta puede ver el diagnóstico."""
+        r = client.get("/api/contabilidad/diagnostico",
+                       params={"empresa_id": 1}, headers=h(solo_lectura_token))
+        assert r.status_code == 200
+
+    def test_solo_lectura_no_repara(self, client, solo_lectura_token):
+        r = client.post("/api/contabilidad/generar-pendientes",
+                        params={"empresa_id": 1}, headers=h(solo_lectura_token))
+        assert r.status_code == 403
+
+    @pytest.mark.parametrize("path, params", [
+        ("/api/contabilidad/generar-pendientes", {"empresa_id": 1}),
+        ("/api/contabilidad/regenerar-asiento-banco",
+         {"empresa_id": 1, "banco": 1, "numero": 999}),
+        ("/api/contabilidad/cierre", {"empresa_id": 1, "anio": 2023}),
+    ])
+    def test_operador_puede_reparar_y_cerrar(self, client, operador_token, path, params):
+        """create = operador: nunca 401/403 (el 400/404/200 depende de los datos)."""
+        r = client.post(path, params=params, headers=h(operador_token))
+        assert r.status_code not in (401, 403), f"{path} -> {r.status_code}"
+
+    @pytest.mark.parametrize("path, params", [
+        ("/api/contabilidad/generar-pendientes", {"empresa_id": 1}),
+        ("/api/contabilidad/cierre", {"empresa_id": 1, "anio": 2023}),
+    ])
+    def test_solo_lectura_no_cierra(self, client, solo_lectura_token, path, params):
+        r = client.post(path, params=params, headers=h(solo_lectura_token))
+        assert r.status_code == 403, f"{path} -> {r.status_code}"
 
 
 # ─── Admin: acceso completo ──────────────────────────────────────────────────
