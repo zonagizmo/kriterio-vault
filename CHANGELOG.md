@@ -5,6 +5,20 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.03] — 2026-09-29 — Informe de auditoría de seguridad multiempresa + RBAC
+
+### Añadido
+- **`docs/auditoria_seguridad.md`** — informe completo de la auditoría de seguridad (fase estática + dinámica) de la versión 1.13.02: inventario de las 133 peticiones API, matriz RBAC (roles × operaciones), matriz multiempresa (25 escenarios), 12 hallazgos con formato `ID/SEVERIDAD/…/RECOMENDACIÓN`, análisis de frontend, revisión de docs vs código, cobertura de pruebas y §35 conclusión (**PROBLEMAS ENCONTRADOS**).
+- Hallazgos documentados **sin aplicar correcciones**: 5 vulnerabilidades ALTAS (SYNC-001/002/003 — `sync/push` escribe/modifica/borra cross-company vía `payload`/`uuid` sin revalidar; EMP-001/002 — `PUT/DELETE /api/empresas/{id}` sin `exigir_empresa`), 3 MEDIAS (RPT-001/002 usuarios sin filtro de empresa, REL-001 relaciones cross-company en CREATE), 1 BAJA (IDOR-001 enumeración por detalle de 404), 1 bug funcional ALTA (FN-001 — PUT con `exigir_empresa(user, data)` y schemas `*Update` sin `empresa_id` → 404 al recurso propio para usuarios con empresa asignada, 14 endpoints), 1 bug funcional MEDIA (FE-001 — exports/descarga backup con `window.open` sin `Authorization` → 401) y decisiones de diseño D-01/D-02/D-03.
+
+### Verificación
+- Auditoría sin modificaciones: `git status` limpio durante toda la fase; suite oficial → **170 passed**; suite de auditoría (85 pruebas, fuera del proyecto en `/tmp/opencode/audit/`) → 73 PASS / 12 FAIL (= los 12 hallazgos).
+
+### Impacto
+- **Base de datos**: sin cambios. **API**: sin cambios (solo documentación). **Dependencias**: sin cambios. **Compatibilidad**: compatible con 1.13.02.
+
+---
+
 ## [1.13.02] — 2026-09-28 — Fix: 500 al conciliar/editar movimientos y vencimientos
 
 ### Corregido
