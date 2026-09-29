@@ -249,7 +249,7 @@ def actualizar_movimiento(mov_id: int, data: MovimientoUpdate, db: Session = Dep
         raise HTTPException(404, "Movimiento no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
-    mov = svc.update_mov(db, mov_id, data)
+    mov = svc.update_movimiento(db, mov_id, data)
     if not mov:
         raise HTTPException(404, "Movimiento no encontrado")
     return _enrich_mov(mov, db)
@@ -321,7 +321,7 @@ def actualizar_vencimiento(vto_id: int, data: VencimientoUpdate, db: Session = D
         raise HTTPException(404, "Vencimiento no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
-    vto = svc.update_vto(db, vto_id, data)
+    vto = svc.update_vencimiento(db, vto_id, data)
     if not vto:
         raise HTTPException(404, "Vencimiento no encontrado")
     return vto

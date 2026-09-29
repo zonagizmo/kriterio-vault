@@ -273,6 +273,55 @@ class TestAdmin:
         assert r.status_code != 403
 
 
+# ─── Regresión v1.13.02: edición de movimientos y vencimientos ────────────────
+# El commit RBAC (2fc82d3) renombró por error svc.update_movimiento →
+# svc.update_mov y svc.update_vencimiento → svc.update_vto (no existen):
+# cualquier PUT devolvía 500. Estos tests impiden que vuelva a pasar.
+
+class TestEdicionBancosRegresion:
+    def _crear_banco_y_mov(self, client, token):
+        r = client.post("/api/bancos", json={"nombre": "Reg banc", "empresa_id": 1},
+                        headers=h(token))
+        assert r.status_code == 201, r.text
+        r = client.post("/api/bancos/movimientos", json={
+            "banco": r.json()["id"], "fecha": "2026-01-15", "total": "123.45",
+            "empresa_id": 1, "texto": "regresion",
+        }, headers=h(token))
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    def test_admin_conciliar_movimiento(self, client, admin_token):
+        mov_id = self._crear_banco_y_mov(client, admin_token)
+        r = client.put(f"/api/bancos/movimientos/{mov_id}",
+                       json={"conciliado": True}, headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        assert r.json()["conciliado"] is True
+
+    def test_operador_conciliar_movimiento(self, client, operador_token):
+        mov_id = self._crear_banco_y_mov(client, operador_token)
+        r = client.put(f"/api/bancos/movimientos/{mov_id}",
+                       json={"conciliado": True}, headers=h(operador_token))
+        assert r.status_code == 200, r.text
+        assert r.json()["conciliado"] is True
+
+    def test_solo_lectura_no_concilia(self, client, admin_token, solo_lectura_token):
+        mov_id = self._crear_banco_y_mov(client, admin_token)
+        r = client.put(f"/api/bancos/movimientos/{mov_id}",
+                       json={"conciliado": True}, headers=h(solo_lectura_token))
+        assert r.status_code == 403, r.status_code
+
+    def test_editar_vencimiento(self, client, admin_token):
+        r = client.post("/api/bancos/vencimientos", json={
+            "empresa_id": 1, "tipo": "F", "fecha": "2026-02-01",
+            "importe": "50.00",
+        }, headers=h(admin_token))
+        assert r.status_code == 201, r.text
+        vto_id = r.json()["id"]
+        r = client.put(f"/api/bancos/vencimientos/{vto_id}",
+                       json={"importe": "75.00"}, headers=h(admin_token))
+        assert r.status_code == 200, r.text
+
+
 # ─── Multiempresa: usuario + empresa + permiso ───────────────────────────────
 
 @pytest.fixture

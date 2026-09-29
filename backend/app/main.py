@@ -22,7 +22,7 @@ import app.db.decimal_adapter  # registra adaptador Decimal para SQLite
 import app.models.usuarios  # registra tablas usuarios_nna, pagas_nna y usuarios_sistema
 import app.models.sync  # registra tabla sync_log
 
-VERSION = "1.13.01"
+VERSION = "1.13.02"
 
 
 def _migrar_usuarios_sistema():

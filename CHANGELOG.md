@@ -5,6 +5,24 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.02] — 2026-09-28 — Fix: 500 al conciliar/editar movimientos y vencimientos
+
+### Corregido
+- **`PUT /api/bancos/movimientos/{id}` → 500** — el commit RBAC (`2fc82d3`) renombró por error `svc.update_movimiento` → `svc.update_mov` (función inexistente) → `AttributeError`. Afectaba a **marcar conciliado**, editar y cualquier modificación de un movimiento bancario. Restaurado el nombre correcto (`app/api/bancos.py:252`).
+- **`PUT /api/bancos/vencimientos/{id}` → 500** — mismo error: `svc.update_vencimiento` → `svc.update_vto` (inexistente). Restaurado (`app/api/bancos.py:324`).
+- **Auditoría**: verificadas las 112 llamadas `svc.*` de los 11 routers con servicio — solo había esos 2 errores.
+
+### Añadido
+- **4 tests de regresión** (`TestEdicionBancosRegresion`): conciliar movimiento como admin (200 + `conciliado=true`) y como operador (200), `solo_lectura` → 403, y edición de vencimiento (200). Impiden que un renombrado erróneo vuelle a pasar desapercibido.
+
+### Verificación
+- `KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q` → **170 passed** (166 + 4); `compileall` OK.
+
+### Impacto
+- **Base de datos**: sin cambios. **API**: 2 endpoints vuelven a funcionar tras el error 500 introducido en v1.13.00.
+
+---
+
 ## [1.13.01] — 2026-09-28 — Operador también diagnostica, repara y cierra ejercicio
 
 ### Modificado
