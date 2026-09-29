@@ -32,6 +32,7 @@ export default function ProveedoresPage() {
     <CrudPage
       titulo="Proveedores"
       entityName="el proveedor"
+      nuevoLabel="+ Nuevo proveedor"
       searchPlaceholder="Buscar por nombre, NIF, localidad..."
       service={service}
       emptyForm={VACIO}

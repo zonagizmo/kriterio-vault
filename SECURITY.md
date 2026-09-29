@@ -181,5 +181,18 @@ Detalle por recurso:
   (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`).
 - Re-auditoría externa (no forma parte del repo): 85/85 en verde tras las
   correcciones de `docs/auditoria_seguridad.md` §F.
-- Pendiente conocido: **sin tests de frontend** (riesgo de regresión UI al
-  ocultar controles; ver RECOMENDACIONES).
+- **Frontend** (`npm test` / `npx vitest run`, v1.13.05): **128 tests en 16
+  ficheros** con Vitest + testing-library (jsdom).
+  - Unidad: `usePermissions` (matriz rol×permiso), `useAuth` e interceptores
+    axios (401 → logout+redirect, `detail` → `Error.message`), descargas
+    (FE-001: `fetch` con Bearer, no `window.open`), formateadores.
+  - Componentes: `CrudPage` (matriz de permisos CRUD y ciclo de vida),
+    `Layout`/navegación por rol, Modal/ConfirmModal/Paginación.
+  - Rutas: `ProtectedRoute` y `RequierePermiso` (`/ajustes`, `/usuarios-
+    sistema`, comodines).
+  - Smoke por página y rol (admin vs `solo_lectura`): login, selector de
+    empresas, inicio, CRUD básicas, documentos/facturas, bancos, contabilidad
+    (8 pestañas), ingresos/gastos + export con token, extras, ajustes.
+  - El API se mockea sustituyendo `api.defaults.adapter` (interceptores
+    reales se ejercitan); configuración en `frontend/vitest.config.js` y
+    `frontend/src/__tests__/helpers.jsx`.

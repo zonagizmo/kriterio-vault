@@ -5,6 +5,29 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.05] — 2026-09-29 — Cobertura completa de tests de frontend
+
+### Añadido
+- **128 tests de frontend en 16 ficheros** (Vitest + @testing-library/react + jsdom; scripts `npm test` / `npm run test:watch`):
+  - **Unidad**: `usePermissions` (matriz rol×permiso), `useAuth` e interceptores axios (401 → logout+redirect, `detail` → `Error.message`), descargas (regresión FE-001: `fetch` con Bearer, no `window.open`), formateadores (`unit-format`).
+  - **Componentes**: `CrudPage` (matriz de permisos CRUD admin/operador/solo_lectura y ciclo de vida crear/editar/borrar), `Layout`/menú por rol + Salir/Cambiar empresa, Modal/ConfirmModal/Paginación.
+  - **Rutas**: `ProtectedRoute`, `RequierePermiso` (`/ajustes`, `/usuarios-sistema`, comodines `*`).
+  - **Smoke por página y rol** (admin vs `solo_lectura`): login, selector de empresas, inicio, clientes/artículos/familias/proveedores, facturas, albaranes, bancos, contabilidad (8 pestañas), ingresos/gastos, extras, ajustes.
+- **Infraestructura de tests**: `frontend/vitest.config.js`, `frontend/src/__tests__/setup.js` y `helpers.jsx` — el API se mockea **sustituyendo `api.defaults.adapter`**, de modo que los interceptores reales de `services/api.js` se ejercitan en cada llamada; rutas por defecto del dashboard/contabilidad/ajustes.
+
+### Corregido
+- **ProveedoresPage**: el botón de alta decía `+ Nuevo proveedore` (faltaba la `r`); ahora recibe `nuevoLabel="+ Nuevo proveedor"` (detectado por el smoke test de botones de `CrudPage`).
+
+### Verificación
+- Frontend: `npm test` **128 passed / 16 ficheros**; ESLint `src` **0 errores**; Prettier OK; `vite build` OK.
+- Backend sin cambios: **191 passed**.
+- Documentación: `SECURITY.md` §8 (suite frontend) y `RECOMENDACIONES.md` #26 cerrada.
+
+### Impacto
+- **Sin cambios de API ni de base de datos.** Frontend: solo la etiqueta del botón de proveedores; el resto es código de tests (fuera del bundle de producción, `dist/` no incluye `__tests__`).
+
+---
+
 ## [1.13.04] — 2026-09-29 — Correcciones de la auditoría de seguridad (12 hallazgos)
 
 Corrige los 12 hallazgos de `docs/auditoria_seguridad.md` §F. **Re-auditoría: 85/85 PASS** (antes 73/85).
