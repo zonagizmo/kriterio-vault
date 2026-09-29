@@ -45,12 +45,12 @@ def crear(data: UsuarioCreate, db: Session = Depends(get_db), user=Depends(get_c
 def actualizar(usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_usuario(db, usuario_id)
     if not previo:
-        raise HTTPException(404, "Usuario no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     u = svc.update_usuario(db, usuario_id, data)
     if not u:
-        raise HTTPException(404, "Usuario no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return u
 
 
@@ -58,11 +58,11 @@ def actualizar(usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_d
 def eliminar(usuario_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_usuario(db, usuario_id)
     if not previo:
-        raise HTTPException(404, "Usuario no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_usuario(db, usuario_id):
-            raise HTTPException(404, "Usuario no encontrado")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))
@@ -109,11 +109,11 @@ def eliminar_paga(paga_id: int, db: Session = Depends(get_db), user=Depends(get_
     from app.models.usuarios import PagaNNA
     previo = db.get(PagaNNA, paga_id)
     if not previo:
-        raise HTTPException(404, "Paga no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_paga(db, paga_id):
-            raise HTTPException(404, "Paga no encontrada")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))

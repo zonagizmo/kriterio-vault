@@ -10,6 +10,7 @@ from app.schemas.facturacion import (
     FacturaRecRead, FacturaRecCreate, FacturaRecUpdate,
 )
 from app.services import facturas as svc
+from app.services.integridad import ReferenciaInvalida
 class RenumerarBody(BaseModel):
     empresa_id: int
     desde_id: Optional[int] = None
@@ -56,7 +57,7 @@ def listar_emi(
 def obtener_emi(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     fac = svc.get_factura_emi(db, factura_id)
     if not fac:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, fac)
     return fac
 
@@ -64,19 +65,25 @@ def obtener_emi(factura_id: int, db: Session = Depends(get_db), user=Depends(get
 @router.post("/emitidas", response_model=FacturaEmiRead, status_code=201)
 def crear_emi(data: FacturaEmiCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     exigir_empresa(user, data)
-    return svc.create_factura_emi(db, data)
+    try:
+        return svc.create_factura_emi(db, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
 
 
 @router.put("/emitidas/{factura_id}", response_model=FacturaEmiRead)
 def actualizar_emi(factura_id: int, data: FacturaEmiUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_factura_emi(db, factura_id)
     if not previo:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
-    fac = svc.update_factura_emi(db, factura_id, data)
+    try:
+        fac = svc.update_factura_emi(db, factura_id, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
     if not fac:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     return fac
 
 
@@ -84,11 +91,11 @@ def actualizar_emi(factura_id: int, data: FacturaEmiUpdate, db: Session = Depend
 def eliminar_emi(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_factura_emi(db, factura_id)
     if not previo:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_factura_emi(db, factura_id):
-            raise HTTPException(404, "Factura no encontrada")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))
@@ -120,7 +127,7 @@ def listar_rec(
 def obtener_rec(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     fac = svc.get_factura_rec(db, factura_id)
     if not fac:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, fac)
     return fac
 
@@ -132,21 +139,25 @@ def crear_rec(data: FacturaRecCreate, db: Session = Depends(get_db), user=Depend
         return svc.create_factura_rec(db, data)
     except svc.FacturaDuplicadaError as e:
         raise HTTPException(409, detail=_detalle_duplicado(e.factura, e.total_nuevo))
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
 
 
 @router.put("/recibidas/{factura_id}", response_model=FacturaRecRead)
 def actualizar_rec(factura_id: int, data: FacturaRecUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_factura_rec(db, factura_id)
     if not previo:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     try:
         fac = svc.update_factura_rec(db, factura_id, data)
     except svc.FacturaDuplicadaError as e:
         raise HTTPException(409, detail=_detalle_duplicado(e.factura, e.total_nuevo))
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
     if not fac:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     return fac
 
 
@@ -154,11 +165,11 @@ def actualizar_rec(factura_id: int, data: FacturaRecUpdate, db: Session = Depend
 def eliminar_rec(factura_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_factura_rec(db, factura_id)
     if not previo:
-        raise HTTPException(404, "Factura no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_factura_rec(db, factura_id):
-            raise HTTPException(404, "Factura no encontrada")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))

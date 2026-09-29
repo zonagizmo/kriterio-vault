@@ -10,6 +10,14 @@
 | Suite oficial del proyecto | **170 passed** (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`) |
 | Suite de auditoría | **85 pruebas: 73 PASS / 12 FAIL — los 12 FAIL son los hallazgos F-01…F-11** (un test codifica un hallazgo compuesto) |
 
+> **ACTUALIZACIÓN (v1.13.04, 2026-09-29):** las correcciones de §F **ya están
+> aplicadas** en la versión 1.13.04 (SYNC-001..003, EMP-001/002, FN-001,
+> RPT-001/002, REL-001, IDOR-001, FE-001; D-01/D-02/D-03 documentados en
+> `SECURITY.md`). **Re-auditoría: 85/85 PASS** y suite oficial ampliada a
+> **191 tests** (21 regresiones nuevas en
+> `backend/tests/test_auditoria_regresion.py`). El cuerpo del informe se
+> conserva tal cual como fotografía del estado auditado (1.13.02).
+
 ---
 
 ## A. Resumen ejecutivo

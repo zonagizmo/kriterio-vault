@@ -27,7 +27,7 @@ def listar(
 def obtener(proveedor_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     proveedor = svc.get_proveedor(db, proveedor_id)
     if not proveedor:
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, proveedor)
     return proveedor
 
@@ -42,12 +42,12 @@ def crear(data: ProveedorCreate, db: Session = Depends(get_db), user=Depends(get
 def actualizar(proveedor_id: int, data: ProveedorUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_proveedor(db, proveedor_id)
     if not previo:
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     proveedor = svc.update_proveedor(db, proveedor_id, data)
     if not proveedor:
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     return proveedor
 
 
@@ -55,7 +55,7 @@ def actualizar(proveedor_id: int, data: ProveedorUpdate, db: Session = Depends(g
 def eliminar(proveedor_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     actual = svc.get_proveedor(db, proveedor_id)
     if not actual:
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, actual)
     if not svc.delete_proveedor(db, proveedor_id):
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")

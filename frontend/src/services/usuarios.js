@@ -1,4 +1,5 @@
 import api from './api'
+import { descargarOVisar } from './descargas'
 
 const BASE = '/usuarios'
 
@@ -31,7 +32,7 @@ export const getResumenPagasAnual = (empresa_id, anio) =>
 
 export const exportarResumenPagasAnual = (empresa_id, anio, format = 'xlsx') => {
   const qs = new URLSearchParams({ empresa_id, anio, format })
-  window.open(`${BASE}/pagas/resumen-anual/export?${qs}`, '_blank')
+  return descargarOVisar(`/api${BASE}/pagas/resumen-anual/export?${qs}`, `resumen_pagas_${anio}.${format}`)
 }
 
 export const getSaldosNNA = (empresa_id) => api.get(`${BASE}/saldos`, { params: { empresa_id } }).then((r) => r.data)
@@ -42,5 +43,5 @@ export const exportarPagas = (params, format = 'xlsx') => {
     if (v !== undefined && v !== '') qs.append(k, v)
   })
   qs.set('format', format)
-  window.open(`${BASE}/pagas/export?${qs}`, '_blank')
+  return descargarOVisar(`/api${BASE}/pagas/export?${qs}`, `pagas.${format}`)
 }

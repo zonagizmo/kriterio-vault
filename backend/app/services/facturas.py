@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func, tuple_
 from decimal import Decimal
 from app.models.facturacion import FacturaEmitida, FacturaRecibida, Apunte
-from app.models.clientes_proveedores import Vencimiento
+from app.models.clientes_proveedores import Vencimiento, Cliente, Proveedor
 from app.schemas.facturacion import (
     FacturaEmiCreate, FacturaEmiUpdate,
     FacturaRecCreate, FacturaRecUpdate,
@@ -12,6 +12,7 @@ from app.services.documentos import (
     siguiente_numero, siguiente_cnumero, guardar_lineas, get_lineas, total_lineas,
     calcular_importe_linea,
 )
+from app.services.integridad import exigir_fk_empresa
 from app.services import contabilidad as cont_svc
 from app.services.sync import registrar_operacion
 
@@ -275,6 +276,7 @@ def get_factura_emi(db: Session, factura_id: int):
 
 
 def create_factura_emi(db: Session, data: FacturaEmiCreate) -> FacturaEmitida:
+    exigir_fk_empresa(db, Cliente, data.cliente, data.empresa_id, "Cliente")
     numero = siguiente_numero(db, FacturaEmitida, data.empresa_id)
     tiponum, cnumero = siguiente_cnumero(db, FacturaEmitida, data.empresa_id, data.fecha)
 
@@ -309,6 +311,8 @@ def update_factura_emi(db: Session, factura_id: int, data: FacturaEmiUpdate) -> 
         return None
     fecha_anterior = fac.fecha
     campos = data.model_dump(exclude={'lineas'}, exclude_unset=True)
+    if 'cliente' in campos:
+        exigir_fk_empresa(db, Cliente, campos['cliente'], fac.empresa_id, "Cliente")
     fac.version = (fac.version or 1) + 1
     for campo, valor in campos.items():
         setattr(fac, campo, valor)
@@ -433,6 +437,7 @@ def get_factura_rec(db: Session, factura_id: int):
 
 
 def create_factura_rec(db: Session, data: FacturaRecCreate) -> FacturaRecibida:
+    exigir_fk_empresa(db, Proveedor, data.proveedor, data.empresa_id, "Proveedor")
     if not data.forzar:
         dup = _buscar_duplicado_rec(db, data.empresa_id, data.proveedor, data.prfactura)
         if dup:
@@ -443,7 +448,6 @@ def create_factura_rec(db: Session, data: FacturaRecCreate) -> FacturaRecibida:
 
     prcuenta = data.prcuenta or ''
     if not prcuenta and data.proveedor:
-        from app.models.clientes_proveedores import Proveedor
         prov = db.query(Proveedor).filter(
             Proveedor.empresa_id == data.empresa_id,
             Proveedor.numero == data.proveedor,
@@ -484,6 +488,8 @@ def update_factura_rec(db: Session, factura_id: int, data: FacturaRecUpdate) -> 
         return None
     fecha_anterior = fac.fecha
     campos = data.model_dump(exclude={'lineas', 'forzar'}, exclude_unset=True)
+    if 'proveedor' in campos:
+        exigir_fk_empresa(db, Proveedor, campos['proveedor'], fac.empresa_id, "Proveedor")
 
     if not data.forzar:
         proveedor_final = campos.get('proveedor', fac.proveedor)

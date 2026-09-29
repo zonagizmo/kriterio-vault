@@ -26,7 +26,7 @@ def listar(
 def obtener(articulo_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     a = svc.get_articulo(db, articulo_id)
     if not a:
-        raise HTTPException(404, "Artículo no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, a)
     return a
 
@@ -41,12 +41,12 @@ def crear(data: ArticuloCreate, db: Session = Depends(get_db), user=Depends(get_
 def actualizar(articulo_id: int, data: ArticuloUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_articulo(db, articulo_id)
     if not previo:
-        raise HTTPException(404, "Artículo no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     a = svc.update_articulo(db, articulo_id, data)
     if not a:
-        raise HTTPException(404, "Artículo no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return a
 
 
@@ -54,7 +54,7 @@ def actualizar(articulo_id: int, data: ArticuloUpdate, db: Session = Depends(get
 def eliminar(articulo_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     actual = svc.get_articulo(db, articulo_id)
     if not actual:
-        raise HTTPException(status_code=404, detail="Articulo no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, actual)
     if not svc.delete_articulo(db, articulo_id):
-        raise HTTPException(404, "Artículo no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")

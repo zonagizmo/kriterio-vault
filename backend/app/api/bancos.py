@@ -12,6 +12,7 @@ from app.schemas.bancos import (
     VencimientoRead, VencimientoCreate, VencimientoUpdate,
 )
 from app.services import bancos as svc
+from app.services.integridad import ReferenciaInvalida
 router = APIRouter(prefix="/api/bancos", tags=["bancos"], dependencies=[Depends(require_method_permission)])
 
 
@@ -156,7 +157,7 @@ def listar(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_d
 def obtener(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     b = svc.get_banco(db, banco_id)
     if not b:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, b)
     return b
 
@@ -171,7 +172,7 @@ def crear(data: BancoCreate, db: Session = Depends(get_db), user=Depends(get_cur
 def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_banco(db, banco_id)
     if not previo:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     try:
@@ -179,7 +180,7 @@ def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db), 
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not b:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return b
 
 
@@ -187,11 +188,11 @@ def actualizar(banco_id: int, data: BancoUpdate, db: Session = Depends(get_db), 
 def eliminar(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_banco(db, banco_id)
     if not previo:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_banco(db, banco_id):
-            raise HTTPException(404, "Banco no encontrado")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))
@@ -201,11 +202,11 @@ def eliminar(banco_id: int, db: Session = Depends(get_db), user=Depends(get_curr
 def reparar_saldos(banco_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_banco(db, banco_id)
     if not previo:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     banco = svc.reparar_saldos_banco(db, banco_id)
     if not banco:
-        raise HTTPException(404, "Banco no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return banco
 
 
@@ -228,7 +229,7 @@ def listar_movimientos(
 def obtener_movimiento(mov_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     mov = svc.get_movimiento(db, mov_id)
     if not mov:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, mov)
     return _enrich_mov(mov, db)
 
@@ -238,6 +239,8 @@ def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db), user
     exigir_empresa(user, data)
     try:
         return _enrich_mov(svc.create_movimiento(db, data), db)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
     except svc.TraspasoSospechosoError as e:
         raise HTTPException(409, detail=_detalle_traspaso_sospechoso(db, e.mov))
 
@@ -246,12 +249,12 @@ def crear_movimiento(data: MovimientoCreate, db: Session = Depends(get_db), user
 def actualizar_movimiento(mov_id: int, data: MovimientoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_movimiento(db, mov_id)
     if not previo:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     mov = svc.update_movimiento(db, mov_id, data)
     if not mov:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return _enrich_mov(mov, db)
 
 
@@ -259,10 +262,10 @@ def actualizar_movimiento(mov_id: int, data: MovimientoUpdate, db: Session = Dep
 def eliminar_movimiento(mov_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_movimiento(db, mov_id)
     if not previo:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     if not svc.delete_movimiento(db, mov_id):
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
 
 
 class ReordenarBody(BaseModel):
@@ -273,11 +276,11 @@ class ReordenarBody(BaseModel):
 def reordenar_movimiento(mov_id: int, body: ReordenarBody, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_movimiento(db, mov_id)
     if not previo:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     mov = svc.reordenar_movimiento(db, mov_id, body.direccion)
     if not mov:
-        raise HTTPException(404, "Movimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return mov
 
 
@@ -318,10 +321,10 @@ def crear_vencimiento(data: VencimientoCreate, db: Session = Depends(get_db), us
 def actualizar_vencimiento(vto_id: int, data: VencimientoUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_vencimiento(db, vto_id)
     if not previo:
-        raise HTTPException(404, "Vencimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     vto = svc.update_vencimiento(db, vto_id, data)
     if not vto:
-        raise HTTPException(404, "Vencimiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return vto

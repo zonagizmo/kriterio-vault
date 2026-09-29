@@ -61,7 +61,7 @@ def listar_empresas(db: Session = Depends(get_db), current_user=Depends(get_curr
 def obtener_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
-        raise HTTPException(404, "Empresa no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(current_user, empresa, campo="id")
     return empresa
 
@@ -83,7 +83,8 @@ def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_us
 def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
-        raise HTTPException(404, "Empresa no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
+    exigir_empresa(current_user, empresa, campo="id")
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(empresa, campo, valor)
     db.commit()
@@ -95,7 +96,8 @@ def actualizar_empresa(empresa_id: int, data: EmpresaUpdate, db: Session = Depen
 def eliminar_empresa(empresa_id: int, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
     if not empresa:
-        raise HTTPException(404, "Empresa no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
+    exigir_empresa(current_user, empresa, campo="id")
     problemas = _empresa_tiene_datos(db, empresa_id)
     if problemas:
         raise HTTPException(400, f"No se puede eliminar: tiene datos en: {', '.join(problemas)}")

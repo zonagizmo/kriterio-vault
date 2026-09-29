@@ -42,12 +42,12 @@ def crear_cuenta(data: CuentaCreate, db: Session = Depends(get_db), user=Depends
 def actualizar_cuenta(cuenta_id: int, data: CuentaUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_cuenta(db, cuenta_id)
     if not previo:
-        raise HTTPException(404, "Cuenta no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     c = svc.update_cuenta(db, cuenta_id, data)
     if not c:
-        raise HTTPException(404, "Cuenta no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     return c
 
 
@@ -55,11 +55,11 @@ def actualizar_cuenta(cuenta_id: int, data: CuentaUpdate, db: Session = Depends(
 def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_cuenta(db, cuenta_id)
     if not previo:
-        raise HTTPException(404, "Cuenta no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_cuenta(db, cuenta_id):
-            raise HTTPException(404, "Cuenta no encontrada")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))
@@ -86,7 +86,7 @@ def listar_asientos(
 def obtener_asiento(asiento_num: int, empresa_id: int = Depends(empresa_query), db: Session = Depends(get_db)):
     a = svc.get_asiento(db, empresa_id, asiento_num)
     if not a:
-        raise HTTPException(404, "Asiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return a
 
 
@@ -113,7 +113,7 @@ def actualizar_asiento(asiento_num: int, data: AsientoCreate, db: Session = Depe
     _validar_cuadre(data)
     a = svc.update_asiento(db, data.empresa_id, asiento_num, data)
     if not a:
-        raise HTTPException(404, "Asiento no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return a
 
 
@@ -121,7 +121,7 @@ def actualizar_asiento(asiento_num: int, data: AsientoCreate, db: Session = Depe
 def eliminar_asiento(asiento_num: int, empresa_id: int = Depends(empresa_query), force: bool = False, db: Session = Depends(get_db)):
     try:
         if not svc.delete_asiento(db, empresa_id, asiento_num, force=force):
-            raise HTTPException(404, "Asiento no encontrado")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         raise HTTPException(409, str(e))
 

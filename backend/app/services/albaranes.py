@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from app.models.facturacion import AlbaranEmitido, AlbaranRecibido, Apunte
+from app.models.clientes_proveedores import Cliente, Proveedor
 from app.schemas.facturacion import (
     AlbaranEmiCreate, AlbaranEmiUpdate,
     AlbaranRecCreate, AlbaranRecUpdate,
@@ -8,6 +9,7 @@ from app.schemas.facturacion import (
 from app.services.documentos import (
     siguiente_numero, siguiente_cnumero, guardar_lineas, get_lineas, total_lineas,
 )
+from app.services.integridad import exigir_fk_empresa
 from app.services.sync import registrar_operacion
 
 
@@ -42,6 +44,7 @@ def get_albaran_emi(db: Session, albaran_id: int):
 
 
 def create_albaran_emi(db: Session, data: AlbaranEmiCreate) -> AlbaranEmitido:
+    exigir_fk_empresa(db, Cliente, data.cliente, data.empresa_id, "Cliente")
     numero = siguiente_numero(db, AlbaranEmitido, data.empresa_id)
     tiponum, cnumero = siguiente_cnumero(db, AlbaranEmitido, data.empresa_id, data.fecha)
 
@@ -69,8 +72,11 @@ def update_albaran_emi(db: Session, albaran_id: int, data: AlbaranEmiUpdate) -> 
     alb = db.query(AlbaranEmitido).filter(AlbaranEmitido.id == albaran_id).first()
     if not alb:
         return None
+    campos = data.model_dump(exclude={'lineas'}, exclude_unset=True)
+    if 'cliente' in campos:
+        exigir_fk_empresa(db, Cliente, campos['cliente'], alb.empresa_id, "Cliente")
     alb.version = (alb.version or 1) + 1
-    for campo, valor in data.model_dump(exclude={'lineas'}, exclude_unset=True).items():
+    for campo, valor in campos.items():
         setattr(alb, campo, valor)
     if data.lineas is not None:
         lineas = guardar_lineas(db, alb.empresa_id, alb.numero, TALBARAN_EMI,
@@ -131,6 +137,7 @@ def get_albaran_rec(db: Session, albaran_id: int):
 
 
 def create_albaran_rec(db: Session, data: AlbaranRecCreate) -> AlbaranRecibido:
+    exigir_fk_empresa(db, Proveedor, data.proveedor, data.empresa_id, "Proveedor")
     numero = siguiente_numero(db, AlbaranRecibido, data.empresa_id)
     tiponum, cnumero = siguiente_cnumero(db, AlbaranRecibido, data.empresa_id, data.fecha)
 
@@ -158,8 +165,11 @@ def update_albaran_rec(db: Session, albaran_id: int, data: AlbaranRecUpdate) -> 
     alb = db.query(AlbaranRecibido).filter(AlbaranRecibido.id == albaran_id).first()
     if not alb:
         return None
+    campos = data.model_dump(exclude={'lineas'}, exclude_unset=True)
+    if 'proveedor' in campos:
+        exigir_fk_empresa(db, Proveedor, campos['proveedor'], alb.empresa_id, "Proveedor")
     alb.version = (alb.version or 1) + 1
-    for campo, valor in data.model_dump(exclude={'lineas'}, exclude_unset=True).items():
+    for campo, valor in campos.items():
         setattr(alb, campo, valor)
     if data.lineas is not None:
         lineas = guardar_lineas(db, alb.empresa_id, alb.numero, TALBARAN_REC,

@@ -6,6 +6,7 @@ from app.models.bancos import Banco, MovBanco, Pago
 from app.models.clientes_proveedores import Vencimiento
 from app.models.facturacion import FacturaEmitida, FacturaRecibida
 from app.schemas.bancos import BancoCreate, BancoUpdate, MovimientoCreate, MovimientoUpdate, VencimientoCreate, VencimientoUpdate
+from app.services.integridad import exigir_fk_empresa
 from app.services import contabilidad as cont_svc
 from app.services.sync import registrar_operacion
 import time
@@ -409,6 +410,7 @@ def create_movimiento(db: Session, data: MovimientoCreate) -> MovBanco:
 
 
 def _create_movimiento_inner(db: Session, data: MovimientoCreate) -> MovBanco:
+    exigir_fk_empresa(db, Banco, data.banco, data.empresa_id, "Banco")
     tiene_transferencia = any(pd.bancot for pd in data.pagos)
     if not tiene_transferencia and not data.forzar:
         sospechoso = _buscar_traspaso_sospechoso(db, data.empresa_id, data.banco, data.fecha, data.total)

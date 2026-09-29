@@ -1,4 +1,5 @@
 import api from './api'
+import { descargarOVisar } from './descargas'
 
 export const getAniosEstadisticas = (empresaId) =>
   api.get('/estadisticas/anios', { params: { empresa_id: empresaId } }).then((r) => r.data)
@@ -29,10 +30,16 @@ export const getListadoGastos = (empresaId, fechaDesde, fechaHasta) =>
 
 export const exportarListadoIngresos = (empresaId, fechaDesde, fechaHasta, format = 'xlsx') => {
   const qs = new URLSearchParams({ empresa_id: empresaId, fecha_desde: fechaDesde, fecha_hasta: fechaHasta, format })
-  window.open(`/api/estadisticas/periodo/ingresos/export?${qs}`, '_blank')
+  return descargarOVisar(
+    `/api/estadisticas/periodo/ingresos/export?${qs}`,
+    `ingresos_${fechaDesde}_${fechaHasta}.${format}`,
+  )
 }
 
 export const exportarListadoGastos = (empresaId, fechaDesde, fechaHasta, format = 'xlsx') => {
   const qs = new URLSearchParams({ empresa_id: empresaId, fecha_desde: fechaDesde, fecha_hasta: fechaHasta, format })
-  window.open(`/api/estadisticas/periodo/gastos/export?${qs}`, '_blank')
+  return descargarOVisar(
+    `/api/estadisticas/periodo/gastos/export?${qs}`,
+    `gastos_${fechaDesde}_${fechaHasta}.${format}`,
+  )
 }

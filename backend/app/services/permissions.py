@@ -164,8 +164,15 @@ def exigir_empresa(user: UsuarioSistema, obj, campo: str = "empresa_id") -> None
 
     `campo` indica el atributo que lleva el identificador de empresa
     (por defecto empresa_id; para el modelo Empresa, id).
+
+    Si el objeto no tiene ese atributo (esquemas `*Update`, que nunca incluyen
+    empresa_id) la comprobación se omite: la validación real se hizo sobre el
+    recurso ya cargado. Antes de este guard, `getattr(obj, campo, None)` devolvía
+    None y rechazaba también el recurso propio del usuario (bug FN-001).
     """
     if obj is None:
+        return
+    if not hasattr(obj, campo):
         return
     if not puede_ver_empresa(user, getattr(obj, campo, None)):
         raise HTTPException(status_code=404, detail="Recurso no encontrado")

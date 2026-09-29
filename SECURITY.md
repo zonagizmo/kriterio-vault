@@ -1,6 +1,7 @@
 # Seguridad y autorización — Kriterio Vault
 
-> Documento vivo. Última revisión: **v1.13.00** (2026-09-28).
+> Documento vivo. Última revisión: **v1.13.04** (2026-09-29), tras la auditoría
+> multiempresa + RBAC (`docs/auditoria_seguridad.md`).
 > Política implementada en `backend/app/services/permissions.py` (única fuente de
 > verdad). El frontend (`frontend/src/services/permissions.js`) solo la refleja.
 
@@ -21,7 +22,9 @@ Token JWT válido → usuario activo (BD) → Rol → Permisos → Empresa → R
 | **404** | Recurso inexistente **o perteneciente a otra empresa** (no se revela existencia) | `GET /api/facturas/{id}` de otra empresa |
 
 El 404-cruzado es deliberado: responder 403 daría información sobre la existencia
-de registros ajenos (§aislamiento multiempresa).
+de registros ajenos (§aislamiento multiempresa). El `detail` es **uniforme**
+(`"Recurso no encontrado"`) en todos los routers: inexistente y ajeno son
+indistinguibles (IDOR-001, corregido en v1.13.04).
 
 ---
 
@@ -78,14 +81,30 @@ Detalle por recurso:
 
 - **`/api/auth`** — `login` (público; usuario inactivo → 401); `me` y
   `cambiar-password` (autenticado); `/usuarios` CRUD + `reset-password` →
-  `user_management`.
+  `user_management` **y aislamiento por empresa**: el listado filtra por la
+  empresa del admin (más usuarios globales `NULL`), el alta de un admin con
+  empresa se fuerza a su propia empresa, y PUT/DELETE/reset sobre usuarios de
+  otra empresa → 404 (RPT-001/002).
 - **`/api/empresas`** — `GET` lista filtrada por la empresa del usuario
-  (sin empresa asignada = todas); `GET /{id}` exige pertenencia; `POST/PUT/DELETE`
-  → `configuration`.
+  (sin empresa asignada = todas); `GET/PUT/DELETE /{id}` exigen pertenencia
+  (`exigir_empresa`, EMP-001/002); `POST/PUT/DELETE` → `configuration`.
+  **Decisión D-03**: `POST` lo puede llamar cualquier admin con `configuration`
+  aunque tenga empresa asignada (crea empresas nuevas); se mantiene así porque
+  crear una empresa no expone datos ajenos — si se desea restringir, añadir
+  `exigir_empresa` también en el alta.
 - **`/api/ajustes`** — listar/crear backups → `backup`; restaurar → `restore`;
   guardar configuración → `configuration`.
+  **Decisión D-01 (documentada)**: los backups son la **BD completa con todas
+  las empresas** y **no se filtran por empresa**: cualquier admin, incluso con
+  empresa asignada, puede listar/descargar/restaurarlos. Es coherente con
+  "admin = administración total", pero implica que un admin de una empresa
+  accede a datos globales vía backups.
 - **`/api/sync`** — `POST /push` autenticado por **API-key de instalación**
   (mecanismo de dispositivo, no de usuario); `POST /ejecutar` → `sync`.
+  El replay valida **tres capas**: la key solo puede escribir en sus
+  `empresas`, `item.empresa_id` es la única fuente de verdad (un
+  `payload.empresa_id` distinto se rechaza) y la entidad `uuid` solo se
+  edita/borra si pertenece a esa empresa (SYNC-001/002/003).
 - **`/api/contabilidad/diagnostico`** → `read` (desde v1.13.01: el operador
   también diagnostica; los POST de reparación/generación/cierre exigen `create`).
 - **`POST /api/shutdown`** → `admin` + `KRITERIO_NO_SHUTDOWN=1` desactiva la
@@ -97,11 +116,20 @@ Detalle por recurso:
 
 - `UsuarioSistema.empresa_id`: `NULL` = todas las empresas (superusuario,
   compatibilidad con usuarios preexistentes); con valor = solo esas empresas.
+  **Decisión D-02**: desde v1.13.04 un admin con empresa asignada **no puede
+  crear usuarios globales ni de otra empresa** (el alta se fuerza a su empresa);
+  crear usuarios con `empresa_id NULL` queda reservado a los admins globales.
 - **Listados**: todos los queries con `empresa_id` pasan por `empresa_query`
   (el backend mete la empresa del usuario en la query).
 - **Detalle/escritura**: `exigir_empresa()` comprueba la pertenencia del recurso
   antes de **leer o escribir** (la comprobación ocurre antes de mutar, no después).
-- Recurso ajeno o inexistente → **404** indistinguible.
+  Si el objeto no tiene el atributo de empresa (esquemas `*Update`, que nunca lo
+  incluyen) la comprobación se omite: la válida es la del recurso ya cargado
+  (corrige el bug FN-001, que rechazaba también el recurso propio).
+- **Referencias entre recursos**: cliente/proveedor/banco referenciados por un
+  documento deben pertenecer a la misma empresa que el documento
+  (`app/services/integridad.py`, REL-001), también en el replay de sync.
+- Recurso ajeno o inexistente → **404** indistinguible (mensaje uniforme).
 - Migración (§23): usuarios existentes con rol `NULL`/inválido pasan a
   `operador`; nunca a `admin`.
 
@@ -131,16 +159,27 @@ Detalle por recurso:
 - **Esto nunca es seguridad**: cualquier llamada directa a la API con un token
   válido vuelve a pasar por `permissions.py`. La política vive y se valida en el
   backend.
+- **Exports y descargas**: `window.open` no envía el header `Authorization` →
+  401 (FE-001). Desde v1.13.04 los exports (estadísticas, pagas, contabilidad)
+  y la descarga de backups usan `fetch` con Bearer + blob
+  (`frontend/src/services/descargas.js`).
 
 ---
 
 ## 8. Pruebas
 
-- `tests/test_roles_permisos.py` — **59 tests**: 401 (sin token, token inválido,
-  firmado con otra clave, expirado, usuario inactivo, rol cambiado en BD),
-  403 de `solo_lectura` en escritura, operador CRUD + 403 en administración,
-  admin, y **404 multiempresa** (clientes, facturas, empresas, listas y creación
-  cruzadas).
-- Suite completa: **160 tests** (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`).
+- `tests/test_roles_permisos.py` — 401 (sin token, token inválido, firmado con
+  otra clave, expirado, usuario inactivo, rol cambiado en BD), 403 de
+  `solo_lectura` en escritura, operador CRUD + 403 en administración, admin, y
+  **404 multiempresa** (clientes, facturas, empresas, listas y creación cruzadas).
+- `tests/test_auditoria_regresion.py` — **21 tests de regresión de la
+  auditoría** (v1.13.04): PUT propio con empresa (FN-001), sync cross-company
+  (SYNC-001..003), empresas PUT/DELETE cross (EMP-001/002), usuarios del
+  sistema por empresa (RPT-001/002), FK entre empresas (REL-001) y 404
+  uniforme (IDOR-001). Si uno falla, la vulnerabilidad ha regresado.
+- Suite completa: **191 tests**
+  (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`).
+- Re-auditoría externa (no forma parte del repo): 85/85 en verde tras las
+  correcciones de `docs/auditoria_seguridad.md` §F.
 - Pendiente conocido: **sin tests de frontend** (riesgo de regresión UI al
   ocultar controles; ver RECOMENDACIONES).

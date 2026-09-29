@@ -1,4 +1,5 @@
 import api from './api'
+import { descargarOVisar } from './descargas'
 
 const BASE = '/ajustes'
 
@@ -8,9 +9,8 @@ export const crearBackup = () => api.post(`${BASE}/backup`).then((r) => r.data)
 
 export const eliminarBackup = (nombre) => api.delete(`${BASE}/backup/${encodeURIComponent(nombre)}`)
 
-export const descargarBackup = (nombre) => {
-  window.open(`${BASE}/backup/download/${encodeURIComponent(nombre)}`, '_blank')
-}
+export const descargarBackup = (nombre) =>
+  descargarOVisar(`/api${BASE}/backup/download/${encodeURIComponent(nombre)}`, nombre)
 
 export const restaurarBackup = (archivo) => {
   const form = new FormData()

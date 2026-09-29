@@ -110,12 +110,22 @@ def replay_operacion(db: Session, tabla: str, entidad_uuid: str, operacion: str,
         raise ReplayError(f"Tabla no sincronizable: {tabla}")
     modelo, esquema_crear, esquema_editar, fn_crear, fn_editar, fn_borrar = registro
 
+    # ── Aislamiento multiempresa (SYNC-001/002/003) ─────────────────────────
+    # `empresa_id` (item) es la única fuente de verdad: ya se validó contra las
+    # empresas autorizadas para la instalación en api/sync.py. El `payload` no
+    # puede redirigir la operación y la entidad solo se toca si es de esa empresa.
+    if payload and payload.get("empresa_id") is not None and payload["empresa_id"] != empresa_id:
+        raise ReplayError("empresa_id del payload no coincide con el de la operación")
+
     existente = db.query(modelo).filter(modelo.uuid == entidad_uuid).first()
+    if existente is not None and getattr(existente, "empresa_id", None) != empresa_id:
+        raise ReplayError("La entidad pertenece a otra empresa")
 
     if operacion == 'C':
         if existente:
             return  # ya aplicada (reintento)
         datos = dict(payload or {})
+        datos["empresa_id"] = empresa_id
         if 'forzar' in esquema_crear.model_fields:
             datos['forzar'] = True  # ya se validó/confirmó en la instalación de origen
         obj = fn_crear(db, esquema_crear(**datos))

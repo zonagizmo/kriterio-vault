@@ -5,6 +5,36 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.04] — 2026-09-29 — Correcciones de la auditoría de seguridad (12 hallazgos)
+
+Corrige los 12 hallazgos de `docs/auditoria_seguridad.md` §F. **Re-auditoría: 85/85 PASS** (antes 73/85).
+
+### Corregido
+- **SYNC-001/002/003 (ALTA)** — `POST /api/sync/push` permitía escribir, editar y borrar recursos de otras empresas (`app/services/sync_replay.py`): el `payload.empresa_id` distinto del `item.empresa_id` se rechaza, `item.empresa_id` se impone como única fuente en el alta, y la entidad `uuid` solo se toca si pertenece a esa empresa (antes la búsqueda era solo por uuid).
+- **EMP-001/002 (ALTA)** — `PUT/DELETE /api/empresas/{id}` sin `exigir_empresa`: un admin con empresa asignada editaba/borraba empresas ajenas. Añadido el chequeo de pertenencia (`app/api/empresas.py`).
+- **FN-001 (ALTA funcional)** — 14 endpoints `PUT` devolvían 404 al **recurso propio** de usuarios con empresa asignada: `exigir_empresa(user, data)` sobre esquemas `*Update` (sin `empresa_id`) fallaba por `getattr → None`. `exigir_empresa` ahora omite la comprobación si el objeto no tiene el atributo (`app/services/permissions.py`); la validación real la hace el recurso ya cargado.
+- **RPT-001/002 (MEDIA)** — `/api/auth/usuarios`: el listado de un admin con empresa ahora filtra por su empresa (más globales `NULL`); el alta con empresa ajena se rechaza (404) y el alta sin empresa se fuerza a la suya; `PUT`, `DELETE` y `reset-password` exigen pertenencia sobre el usuario objetivo.
+- **REL-001 (MEDIA)** — documentos con FK de otra empresa: nuevo `app/services/integridad.py` (`exigir_fk_empresa`, acepta `id` o `numero`, mensaje único) aplicado en crear/editar de facturas emitidas/recibidas, albaranes emitidos/recibidos y movimientos bancarios — también cubre el replay de sync. La API devuelve 404 uniforme.
+- **IDOR-001 (BAJA)** — mensaje de 404 unificado a `"Recurso no encontrado"` en todos los routers: el detalle ya no distingue un id inexistente de un recurso ajeno (coherente con `SECURITY.md`).
+- **FE-001 (MEDIA funcional)** — los exports (estadísticas, pagas, resumen anual, CSV contabilidad) y la descarga de backups usaban `window.open` sin `Authorization` → 401 (y en 3 casos sin prefijo `/api`). Nuevo helper `frontend/src/services/descargas.js` (`fetch` con Bearer → blob → `<a download>`), errors avisados con `alert`.
+
+### Documentado
+- **D-01**: los backups son globales (BD completa) y no se filtran por empresa — cualquier admin los lista/descarga/restaura.
+- **D-02**: `empresa_id NULL` = superusuario; los admins con empresa ya no pueden crear usuarios globales ni de otra empresa.
+- **D-03**: `POST /api/empresas` sigue disponible para cualquier admin con `configuration` (creación de empresas nuevas, decisión explícita). Todo en `SECURITY.md` (§4/§5/§7/§8).
+
+### Añadido
+- **21 tests de regresión** (`backend/tests/test_auditoria_regresion.py`): uno por hallazgo — FN-001 (PUT propio/ajeno), sync cross (payload/uuid), empresas cross, usuarios por empresa, relaciones cross y 404 uniforme parametrizado.
+
+### Verificación
+- Suite oficial: **191 passed** (170 + 21); `compileall` OK; ESLint `src` 0 errores; `npm run build` OK.
+- Re-auditoría (suite externa `/tmp/opencode/audit/`, 85 pruebas): **85 passed** (antes 73 PASS / 12 FAIL).
+
+### Impacto
+- **Base de datos**: sin cambios (sin migraciones). **API**: 4 respuestas dejan de ser vulnerables (404/400 en vez de 200/201 cross-company); los PUT propios pasan de 404 a 200. **Frontend**: exports ahora descargan vía blob. **Compatibilidad**: datos existentes compatibles; los `payload` de sync legítimos (empresa coincidente) no se ven afectados.
+
+---
+
 ## [1.13.03] — 2026-09-29 — Informe de auditoría de seguridad multiempresa + RBAC
 
 ### Añadido

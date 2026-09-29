@@ -1,4 +1,5 @@
 import api from './api'
+import { descargarOVisar } from './descargas'
 
 const BASE = '/contabilidad'
 
@@ -62,9 +63,9 @@ export const realizarCierre = (empresa_id, anio, crear_apertura = true) =>
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
 
 export const exportarCSV = (tipo, params) => {
-  const url = new URL(`${window.location.origin}${BASE}/export/${tipo}`)
+  const qs = new URLSearchParams()
   Object.entries(params).forEach(([k, v]) => {
-    if (v != null) url.searchParams.set(k, v)
+    if (v != null) qs.set(k, v)
   })
-  window.open(url.toString(), '_blank')
+  return descargarOVisar(`/api${BASE}/export/${tipo}?${qs}`, `${tipo}.csv`)
 }

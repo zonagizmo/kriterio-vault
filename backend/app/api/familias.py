@@ -17,7 +17,7 @@ def listar(empresa_id: int = Depends(empresa_query), db: Session = Depends(get_d
 def obtener(familia_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     f = svc.get_familia(db, familia_id)
     if not f:
-        raise HTTPException(404, "Familia no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, f)
     return f
 
@@ -32,12 +32,12 @@ def crear(data: FamiliaCreate, db: Session = Depends(get_db), user=Depends(get_c
 def actualizar(familia_id: int, data: FamiliaUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_familia(db, familia_id)
     if not previo:
-        raise HTTPException(404, "Familia no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     f = svc.update_familia(db, familia_id, data)
     if not f:
-        raise HTTPException(404, "Familia no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")
     return f
 
 
@@ -45,7 +45,7 @@ def actualizar(familia_id: int, data: FamiliaUpdate, db: Session = Depends(get_d
 def eliminar(familia_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     actual = svc.get_familia(db, familia_id)
     if not actual:
-        raise HTTPException(status_code=404, detail="Familia no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, actual)
     if not svc.delete_familia(db, familia_id):
-        raise HTTPException(404, "Familia no encontrada")
+        raise HTTPException(404, "Recurso no encontrado")

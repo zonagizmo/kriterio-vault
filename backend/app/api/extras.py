@@ -35,7 +35,7 @@ def listar(
 def obtener(extra_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     e = svc.get_extra(db, extra_id)
     if not e:
-        raise HTTPException(404, "Extra no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, e)
     return e
 
@@ -50,12 +50,12 @@ def crear(data: ExtraCreate, db: Session = Depends(get_db), user=Depends(get_cur
 def actualizar(extra_id: int, data: ExtraUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_extra(db, extra_id)
     if not previo:
-        raise HTTPException(404, "Extra no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     e = svc.update_extra(db, extra_id, data)
     if not e:
-        raise HTTPException(404, "Extra no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return e
 
 
@@ -70,11 +70,11 @@ def renumerar(body: RenumerarBody, db: Session = Depends(get_db), user=Depends(g
 def eliminar(extra_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_extra(db, extra_id)
     if not previo:
-        raise HTTPException(404, "Extra no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     try:
         if not svc.delete_extra(db, extra_id):
-            raise HTTPException(404, "Extra no encontrado")
+            raise HTTPException(404, "Recurso no encontrado")
     except ValueError as e:
         db.rollback()
         raise HTTPException(400, str(e))

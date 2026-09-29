@@ -9,6 +9,7 @@ from app.schemas.facturacion import (
     AlbaranRecRead, AlbaranRecCreate, AlbaranRecUpdate,
 )
 from app.services import albaranes as svc
+from app.services.integridad import ReferenciaInvalida
 router = APIRouter(prefix="/api/albaranes", tags=["albaranes"], dependencies=[Depends(require_method_permission)])
 
 
@@ -28,7 +29,7 @@ def listar_emi(
 def obtener_emi(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     alb = svc.get_albaran_emi(db, albaran_id)
     if not alb:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, alb)
     return alb
 
@@ -36,19 +37,25 @@ def obtener_emi(albaran_id: int, db: Session = Depends(get_db), user=Depends(get
 @router.post("/emitidos", response_model=AlbaranEmiRead, status_code=201)
 def crear_emi(data: AlbaranEmiCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     exigir_empresa(user, data)
-    return svc.create_albaran_emi(db, data)
+    try:
+        return svc.create_albaran_emi(db, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
 
 
 @router.put("/emitidos/{albaran_id}", response_model=AlbaranEmiRead)
 def actualizar_emi(albaran_id: int, data: AlbaranEmiUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_albaran_emi(db, albaran_id)
     if not previo:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
-    alb = svc.update_albaran_emi(db, albaran_id, data)
+    try:
+        alb = svc.update_albaran_emi(db, albaran_id, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
     if not alb:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return alb
 
 
@@ -56,10 +63,10 @@ def actualizar_emi(albaran_id: int, data: AlbaranEmiUpdate, db: Session = Depend
 def eliminar_emi(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_albaran_emi(db, albaran_id)
     if not previo:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     if not svc.delete_albaran_emi(db, albaran_id):
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
 
 
 # ─── Recibidos ────────────────────────────────────────────────────────────────
@@ -78,7 +85,7 @@ def listar_rec(
 def obtener_rec(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     alb = svc.get_albaran_rec(db, albaran_id)
     if not alb:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, alb)
     return alb
 
@@ -86,19 +93,25 @@ def obtener_rec(albaran_id: int, db: Session = Depends(get_db), user=Depends(get
 @router.post("/recibidos", response_model=AlbaranRecRead, status_code=201)
 def crear_rec(data: AlbaranRecCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     exigir_empresa(user, data)
-    return svc.create_albaran_rec(db, data)
+    try:
+        return svc.create_albaran_rec(db, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
 
 
 @router.put("/recibidos/{albaran_id}", response_model=AlbaranRecRead)
 def actualizar_rec(albaran_id: int, data: AlbaranRecUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_albaran_rec(db, albaran_id)
     if not previo:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
-    alb = svc.update_albaran_rec(db, albaran_id, data)
+    try:
+        alb = svc.update_albaran_rec(db, albaran_id, data)
+    except ReferenciaInvalida as e:
+        raise HTTPException(404, str(e))
     if not alb:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     return alb
 
 
@@ -106,7 +119,7 @@ def actualizar_rec(albaran_id: int, data: AlbaranRecUpdate, db: Session = Depend
 def eliminar_rec(albaran_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_albaran_rec(db, albaran_id)
     if not previo:
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")
     exigir_empresa(user, previo)
     if not svc.delete_albaran_rec(db, albaran_id):
-        raise HTTPException(404, "Albarán no encontrado")
+        raise HTTPException(404, "Recurso no encontrado")

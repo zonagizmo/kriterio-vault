@@ -27,7 +27,7 @@ def listar(
 def obtener(cliente_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     cliente = svc.get_cliente(db, cliente_id)
     if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, cliente)
     return cliente
 
@@ -42,12 +42,12 @@ def crear(data: ClienteCreate, db: Session = Depends(get_db), user=Depends(get_c
 def actualizar(cliente_id: int, data: ClienteUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     previo = svc.get_cliente(db, cliente_id)
     if not previo:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, previo)
     exigir_empresa(user, data)
     cliente = svc.update_cliente(db, cliente_id, data)
     if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     return cliente
 
 
@@ -55,7 +55,7 @@ def actualizar(cliente_id: int, data: ClienteUpdate, db: Session = Depends(get_d
 def eliminar(cliente_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     actual = svc.get_cliente(db, cliente_id)
     if not actual:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
     exigir_empresa(user, actual)
     if not svc.delete_cliente(db, cliente_id):
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
