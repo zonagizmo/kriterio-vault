@@ -68,6 +68,10 @@ def obtener_empresa(empresa_id: int, db: Session = Depends(get_db), current_user
 
 @router.post("", response_model=EmpresaRead, status_code=201)
 def crear_empresa(data: EmpresaCreate, db: Session = Depends(get_db), current_user=Depends(require_configuration)):
+    # D-03 (v1.13.07): solo admins globales. Un admin con empresa asignada
+    # crearía una empresa que no vería en su selector ni podría gestionar.
+    if current_user.empresa_id is not None:
+        raise HTTPException(403, "Solo un administrador global puede crear empresas")
     existing = db.query(Empresa).filter(Empresa.codigo == data.codigo).first()
     if existing:
         raise HTTPException(400, "Ya existe una empresa con ese código")

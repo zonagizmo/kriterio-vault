@@ -5,6 +5,42 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.07] — 2026-09-29 — D-03: alta de empresas solo para admin global
+
+### Corregido
+- **D-03** — `POST /api/empresas` permitía a cualquier admin con empresa asignada crear empresas: salía 201 con una empresa que su `GET /empresas` (filtrado por pertenencia) no le dejaba ver ni gestionar (PUT/DELETE → 404) → empresa huérfana. Ahora exige **admin global** (`empresa_id NULL`) → 403 en caso contrario (`app/api/empresas.py`).
+- **Frontend** — `EmpresasSelectorPage` oculta "+ Nueva empresa" y "Crear primera empresa" a los admins con empresa asignada (antes solo miraba el permiso `configuration`; el botón devolvía 403 si se pulsaba).
+
+### Tests
+- `test_roles_permisos.py::TestAdmin::test_alta_empresa_solo_admin_global` (403 con empresa / 201 global).
+- 2 expectativas nuevas en `test_auditoria_expectativas.py` (D-03): **87 pruebas**.
+- 2 tests nuevos en `page-empresas-selector.test.jsx`.
+
+### Verificación
+- Backend: **279 passed**; frontend: **130 passed**, ESLint 0 errores, build OK.
+- Documentación: `SECURITY.md` D-03 reescrita.
+
+### Impacto
+- **API**: `POST /api/empresas` de admin con empresa pasa de 201 a 403 (cambio deliberado). **Base de datos**: sin cambios. **Compatibilidad**: el admin global sigue creando empresas con normalidad; los scripts (`create_admin.py`, `crear_instalacion.py`) tocan la DB directamente y no usan este endpoint.
+
+---
+
+## [1.13.06] — 2026-09-29 — Suite de auditoría integrada en el repo
+
+### Añadido
+- **`backend/tests/test_auditoria_expectativas.py`** — la suite de la re-auditoría de seguridad (**85 pruebas**: expectativas multiempresa 404, matriz RBAC 403/200/404, sync cross-company, IDOR uniforme, shutdown restringido...) pasa a vivir en el repo. Antes solo existía en `/tmp/opencode/audit/` (volátil, "no forma parte del proyecto").
+  - Autocontenida: fixture `env` propia (SQLite en memoria por test, `TestClient` con `get_db` sobrerrido, hash bcrypt único por proceso); no depende de `conftest.py` ni colisiona con las fixtures existentes.
+  - `SECURITY.md` §8 y `docs/auditoria_seguridad.md` actualizados (ya no es "externa").
+
+### Verificación
+- Suite oficial: **276 passed** (191 + 85) en ~1:44 (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`); 85/85 de la auditoría individual también en verde.
+- Frontend sin cambios: 128 tests OK.
+
+### Impacto
+- **Sin cambios de API, código de aplicación ni base de datos** (solo se añade un fichero de tests + documentación). Compatibilidad total.
+
+---
+
 ## [1.13.05] — 2026-09-29 — Cobertura completa de tests de frontend
 
 ### Añadido

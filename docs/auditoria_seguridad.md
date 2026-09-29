@@ -17,6 +17,8 @@
 > **191 tests** (21 regresiones nuevas en
 > `backend/tests/test_auditoria_regresion.py`). El cuerpo del informe se
 > conserva tal cual como fotografía del estado auditado (1.13.02).
+> **v1.13.06:** la suite de re-auditoría pasa a vivir en el repo como
+> `backend/tests/test_auditoria_expectativas.py` (276 tests totales).
 
 ---
 

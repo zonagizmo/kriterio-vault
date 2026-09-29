@@ -12,6 +12,8 @@ export default function EmpresasSelectorPage() {
   const { user, logout } = useAuth()
   const { has } = usePermissions()
   const navigate = useNavigate()
+  // D-03: el alta de empresas es solo de admin global (el backend devuelve 403)
+  const puedeCrearEmpresa = has('configuration') && !user?.empresa_id
 
   const [showForm, setShowForm] = useState(false)
   const [codigo, setCodigo] = useState('')
@@ -81,7 +83,7 @@ export default function EmpresasSelectorPage() {
       {empresas.length === 0 && !showForm ? (
         <div className="text-center">
           <p className="text-mgd-100 opacity-40 text-sm mb-4">No hay empresas configuradas</p>
-          {has('configuration') && (
+          {puedeCrearEmpresa && (
             <button
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-mgd-600 hover:bg-mgd-500 text-white text-sm font-medium rounded-lg transition-colors"
@@ -174,7 +176,7 @@ export default function EmpresasSelectorPage() {
             </div>
           ))}
 
-          {has('configuration') && (
+          {puedeCrearEmpresa && (
             <button
               onClick={() => setShowForm(true)}
               className="border border-dashed border-mgd-700 hover:border-mgd-500 rounded-xl p-6 text-center transition-all group"

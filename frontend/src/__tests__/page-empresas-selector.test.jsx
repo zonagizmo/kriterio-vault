@@ -12,8 +12,8 @@ const EMPRESAS = [
   { id: 2, codigo: 'E2', nombre: 'Empresa 2' },
 ]
 
-function renderSelector({ rol = 'admin' } = {}) {
-  setSession({ rol, empresa: null })
+function renderSelector({ rol = 'admin', empresa = null } = {}) {
+  setSession({ rol, empresa })
   return render(
     <MemoryRouter>
       <AuthProvider>
@@ -55,6 +55,21 @@ describe('EmpresasSelectorPage', () => {
     await screen.findByText('Empresa 1')
     expect(screen.queryByText('+ Nueva empresa')).not.toBeInTheDocument()
     expect(screen.queryByTitle('Eliminar empresa')).not.toBeInTheDocument()
+  })
+
+  it('admin CON empresa asignada NO puede crear empresas (D-03)', async () => {
+    mockApi([{ path: '/empresas', data: EMPRESAS }])
+    renderSelector({ rol: 'admin', empresa: { id: 1, codigo: 'E1', nombre: 'Empresa 1' } })
+    await screen.findByText('Empresa 1')
+    expect(screen.queryByText('+ Nueva empresa')).not.toBeInTheDocument()
+    expect(screen.getAllByTitle('Eliminar empresa')).toHaveLength(2)
+  })
+
+  it('admin CON empresa asignada sin lista no ofrece crear la primera (D-03)', async () => {
+    mockApi([{ path: '/empresas', data: [] }])
+    renderSelector({ rol: 'admin', empresa: { id: 1, codigo: 'E1', nombre: 'Empresa 1' } })
+    expect(await screen.findByText('No hay empresas configuradas')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear primera empresa' })).not.toBeInTheDocument()
   })
 
   it('crear empresa: POST con codigo/nombre y la selecciona', async () => {

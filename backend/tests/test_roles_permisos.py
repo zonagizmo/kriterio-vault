@@ -212,6 +212,19 @@ class TestAdmin:
         assert client.delete(f"/api/clientes/{cliente_id}",
                              headers=h(admin_token)).status_code == 204
 
+    def test_alta_empresa_solo_admin_global(self, client, admin_token, db_session, usuario_empresa):
+        """D-03 (v1.13.07): el alta de empresas exige admin global (sin empresa asignada)."""
+        user = usuario_empresa("adm_emp1", 1)
+        user.rol = "admin"
+        db_session.commit()
+        tok = create_access_token({"sub": user.id, "rol": "admin"})
+        r = client.post("/api/empresas", json={"codigo": "NUE1", "nombre": "Nueva"},
+                        headers=h(tok))
+        assert r.status_code == 403, f"admin con empresa creó empresa: {r.status_code}"
+        r2 = client.post("/api/empresas", json={"codigo": "NUE2", "nombre": "Nueva Global"},
+                         headers=h(admin_token))
+        assert r2.status_code == 201, r2.text
+
     def test_gestion_usuarios(self, client, admin_token, db_session):
         r = client.get("/api/auth/usuarios", headers=h(admin_token))
         assert r.status_code == 200

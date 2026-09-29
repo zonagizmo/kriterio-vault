@@ -1,3 +1,3 @@
-export const VERSION = '1.13.05'
+export const VERSION = '1.13.07'
 // Elimina ceros iniciales de cada componente: 1.01.00 → 1.1.0
 export const VERSION_DISPLAY = VERSION.split('.').map(Number).join('.')

@@ -88,10 +88,12 @@ Detalle por recurso:
 - **`/api/empresas`** — `GET` lista filtrada por la empresa del usuario
   (sin empresa asignada = todas); `GET/PUT/DELETE /{id}` exigen pertenencia
   (`exigir_empresa`, EMP-001/002); `POST/PUT/DELETE` → `configuration`.
-  **Decisión D-03**: `POST` lo puede llamar cualquier admin con `configuration`
-  aunque tenga empresa asignada (crea empresas nuevas); se mantiene así porque
-  crear una empresa no expone datos ajenos — si se desea restringir, añadir
-  `exigir_empresa` también en el alta.
+  **Decisión D-03 (v1.13.07)**: `POST /api/empresas` ahora exige además
+  **admin global** (`empresa_id NULL`); un admin con empresa asignada recibe
+  403. Antes cualquier admin con `configuration` podía crear empresas: generaba
+  empresas huérfanas que su propio `GET /empresas` (filtrado por pertenencia)
+  no le dejaba ver ni gestionar (PUT/DELETE → 404). El frontend oculta el
+  botón "+ Nueva empresa" en el mismo caso.
 - **`/api/ajustes`** — listar/crear backups → `backup`; restaurar → `restore`;
   guardar configuración → `configuration`.
   **Decisión D-01 (documentada)**: los backups son la **BD completa con todas
@@ -177,10 +179,12 @@ Detalle por recurso:
   (SYNC-001..003), empresas PUT/DELETE cross (EMP-001/002), usuarios del
   sistema por empresa (RPT-001/002), FK entre empresas (REL-001) y 404
   uniforme (IDOR-001). Si uno falla, la vulnerabilidad ha regresado.
-- Suite completa: **191 tests**
+- Suite completa: **276 tests**
   (`KRITERIO_NO_SHUTDOWN=1 ./venv/bin/python -m pytest -q`).
-- Re-auditoría externa (no forma parte del repo): 85/85 en verde tras las
-  correcciones de `docs/auditoria_seguridad.md` §F.
+- `tests/test_auditoria_expectativas.py` — **85 pruebas de la re-auditoría**
+  (`docs/auditoria_seguridad.md`), **85/85 en verde** tras las correcciones de
+  §F. Viven en el repo desde v1.13.06 (antes en `/tmp/opencode/audit/`);
+  autocontenida (fixture `env` propia, no usa `conftest.py`).
 - **Frontend** (`npm test` / `npx vitest run`, v1.13.05): **128 tests en 16
   ficheros** con Vitest + testing-library (jsdom).
   - Unidad: `usePermissions` (matriz rol×permiso), `useAuth` e interceptores
