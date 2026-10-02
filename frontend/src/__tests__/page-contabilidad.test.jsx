@@ -8,7 +8,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '../hooks/useAuth.jsx'
 import { EmpresaProvider } from '../hooks/useEmpresa.jsx'
 import ContabilidadPage from '../pages/contabilidad'
-import { apiCalls, setSession, EMPRESA } from './helpers.jsx'
+import { apiCalls, setSession, mockApi, EMPRESA } from './helpers.jsx'
 
 function renderContab(ruta = '/contabilidad') {
   setSession({ rol: 'admin', empresa: EMPRESA })
@@ -74,6 +74,15 @@ describe('ContabilidadPage', () => {
           ).toBe(true),
         )
     }
+  })
+
+  it('P&G: si la consulta falla muestra el error (no se queda mudo)', async () => {
+    mockApi([{ path: '/contabilidad/pyg', status: 500, data: { detail: 'Error al calcular' } }])
+    renderContab()
+    await waitFor(() => expect(apiCalls.some((c) => c.url === '/contabilidad/cuentas')).toBe(true))
+    fireEvent.click(screen.getByRole('button', { name: 'P&G' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular' }))
+    expect(await screen.findByText('Error al calcular')).toBeInTheDocument()
   })
 
   it('sin empresa lo indica', () => {

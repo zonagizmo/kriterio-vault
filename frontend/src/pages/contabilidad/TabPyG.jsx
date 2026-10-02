@@ -54,15 +54,19 @@ export default function TabPyG({ empresa }) {
   const [fechaHasta, setFechaHasta] = useState(`${anioActual}-12-31`)
   const [data, setData] = useState(null)
   const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
 
   const consultar = async () => {
     setCargando(true)
+    setError('')
     try {
       const params = { empresa_id: empresa.id }
       if (fechaDesde) params.fecha_desde = fechaDesde
       if (fechaHasta) params.fecha_hasta = fechaHasta
       const res = await getPyG(params)
       setData(res)
+    } catch (err) {
+      setError(err.message || 'Error al calcular')
     } finally {
       setCargando(false)
     }
@@ -82,6 +86,7 @@ export default function TabPyG({ empresa }) {
         <button className="btn btn-primary self-end" onClick={consultar} disabled={cargando}>
           {cargando ? 'Calculando...' : 'Calcular'}
         </button>
+        {error && <span className="text-sm text-red-600 self-end pb-2">{error}</span>}
         {data && (
           <button
             className="btn btn-secondary self-end"

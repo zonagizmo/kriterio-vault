@@ -5,6 +5,25 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.08] — 2026-09-29 — Fix P&G: 500 por Decimal + fallo mudo en la UI
+
+### Corregido
+- **P&G devolvía 500 en empresas con saldo inicial de bancos** (`app/services/contabilidad.py`): `func.sum()` sobre la columna `Numeric` devuelve `Decimal` y `ti/tg` son `float` → `round(ti - tg + saldo_inicial, 2)` lanzaba `TypeError: unsupported operand type(s) for +: 'float' and 'decimal.Decimal'`. Afectaba a la pestaña **P&G** y a su **Exportar CSV** (mismo `get_pyg`); las empresas con saldo inicial 0 no lo sufrían (el `or 0` lo enmascaraba). Era el mismo bug que ya se corrigió en Sumas y Saldos (v1.11.18). Reproducido contra la BD real: empresa 2 (Fundación Diagrama) → 500, empresa 1 → 200.
+- **`TabPyG` no mostraba errores**: no tenía `catch` (única pestaña de contabilidad sin él), así que el 500 se rechazaba en silencio y el usuario veía "no hace nada". Ahora muestra el mensaje de error junto al botón, igual que Sumas y Saldos.
+
+### Tests
+- Backend: `TestPyGConSaldoInicial` — asiento de apertura (57xxxx, tpasiento A) → `GET /pyg` y `GET /export/pyg` responden 200 y `saldo_inicial_bancos` correcto.
+- Frontend: P&G con respuesta 500 muestra el mensaje de error (no se queda mudo).
+
+### Verificación
+- Backend: **280 passed**; frontend: **131 passed**, ESLint 0 errores, Prettier OK, build OK.
+- Reproducción directa contra `gestionmgd.db` (TestClient, solo lectura): empresa 2 pasa de 500 a 200 en `pyg` y `export/pyg`; barrido de los 9 endpoints de contabilidad en empresas 1 y 2 → todos 200.
+
+### Impacto
+- **API**: `GET /api/contabilidad/pyg` y `/export/pyg` dejan de dar 500 (respuestas que fallaban ahora son correctas). **Base de datos**: sin cambios. **Frontend**: feedback de error en P&G.
+
+---
+
 ## [1.13.07] — 2026-09-29 — D-03: alta de empresas solo para admin global
 
 ### Corregido

@@ -701,7 +701,9 @@ def get_pyg(db: Session, empresa_id: int, fecha_desde=None, fecha_hasta=None) ->
         saldo_query = saldo_query.filter(Diario.fecha >= fecha_desde)
     if fecha_hasta:
         saldo_query = saldo_query.filter(Diario.fecha <= fecha_hasta)
-    saldo_inicial = saldo_query.scalar() or 0
+    # float(): func.sum() devuelve Decimal (importe es Numeric) y ti/tg son
+    # float — sin el cast, float + Decimal → TypeError (500 en PyG, v1.13.08)
+    saldo_inicial = float(saldo_query.scalar() or 0)
 
     return {
         'gastos': gastos,

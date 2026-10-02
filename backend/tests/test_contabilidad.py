@@ -186,3 +186,30 @@ class TestDeleteCuenta:
         db_session.commit()
         with pytest.raises(ValueError, match="tiene 1 apuntes"):
             delete_cuenta(db_session, c.id)
+
+
+def h(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+# ─── Regresión v1.13.08: PyG con saldo inicial de bancos ─────────────────────
+# func.sum() sobre la columna Numeric devuelve Decimal y ti/tg son float:
+# get_pyg hacía float + Decimal → TypeError → 500 en la pestaña P&G de las
+# empresas con asientos de apertura en cuentas 57xxxx (saldo inicial > 0).
+
+class TestPyGConSaldoInicial:
+    def test_pyg_y_export_200_con_apertura(self, client, admin_token, db_session):
+        db_session.add(Diario(empresa_id=1, asiento=1, fecha=datetime.date(2025, 12, 31),
+                              cuenta="5720000", tpasiento="A", importe=1000))
+        db_session.add(Diario(empresa_id=1, asiento=2, fecha=datetime.date(2026, 1, 15),
+                              cuenta="6000000", importe=250))
+        db_session.commit()
+
+        r = client.get("/api/contabilidad/pyg", params={"empresa_id": 1}, headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert j["saldo_inicial_bancos"] == 1000
+        assert j["resultado_con_saldo_inicial"] == j["resultado"] + 1000
+
+        r2 = client.get("/api/contabilidad/export/pyg", params={"empresa_id": 1}, headers=h(admin_token))
+        assert r2.status_code == 200, r2.text
