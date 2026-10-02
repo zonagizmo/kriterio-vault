@@ -44,6 +44,31 @@ missing=0
 [ ! -f "$VITE"    ] && echo -e "${RED}✗ No se encontró vite en frontend/node_modules${NC}" && missing=1
 [ $missing -eq 1  ] && echo -e "${YELLOW}Pista: ejecuta 'pip install -r requirements.txt' en backend/ y 'npm install' en frontend/${NC}" && exit 1
 
+# ── Watches inotify disponibles ────────────────────────────────
+# Algunos programas (pcloud, Firefox...) consumen casi todos los
+# watches y Vite muere con ENOSPC. Si quedan pocos, usamos polling.
+watches_libres() {
+  local max used=0 p fd link n nfd
+  max=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null) || max=0
+  [ "$max" -gt 0 ] || { echo 999999; return; }
+  for p in /proc/[0-9]*; do
+    for fd in "$p"/fd/*; do
+      link=$(readlink "$fd" 2>/dev/null || true)
+      [ "$link" = "anon_inode:inotify" ] || continue
+      nfd="${fd##*/}"
+      n=$(grep -c '^inotify wd:' "$p/fdinfo/$nfd" 2>/dev/null) || n=0
+      used=$((used + ${n:-0}))
+    done
+  done
+  [ "$used" -lt "$max" ] && echo $((max - used)) || echo 0
+}
+
+LIBRES=$(watches_libres)
+if [ "$LIBRES" -lt 2048 ]; then
+  echo -e "${YELLOW}⚠ Solo $LIBRES watches inotify libres — Vite usará polling (sube fs.inotify.max_user_watches con sudo para evitarlo).${NC}"
+  export CHOKIDAR_USEPOLLING=true
+fi
+
 # ── Liberar puertos ocupados ───────────────────────────────────
 liberar_puerto() {
   local puerto=$1
