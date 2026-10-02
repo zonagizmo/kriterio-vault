@@ -3,23 +3,45 @@ import api from '../services/api'
 import { usePermissions } from '../hooks/usePermissions'
 
 export default function BotonApagar({ variant = 'sidebar' }) {
-  const { has } = usePermissions()
+  const { has, user } = usePermissions()
   const [confirmando, setConfirmando] = useState(false)
   const [apagando, setApagando] = useState(false)
+  const [error, setError] = useState(null)
 
-  // Apagar el servidor es una operación administrativa (el backend exige
-  // permiso admin): no se muestra a operador ni a solo_lectura.
-  if (!has('admin')) return null
+  // NUE-001: el backend exige administrador GLOBAL (empresa_id NULL): un admin
+  // con empresa asignada recibiría 403, así que el botón no se le ofrece.
+  // Tampoco a operador ni a solo_lectura (sin permiso admin).
+  if (!has('admin') || user?.empresa_id != null) return null
 
   async function apagar() {
     setApagando(true)
     try {
       await api.post('/shutdown')
-    } catch {
+    } catch (err) {
+      if (err.status === 403) {
+        // El backend rechazó la operación: el servidor sigue en pie.
+        setApagando(false)
+        setError(err.message || 'No tienes permisos para apagar el servidor')
+        return
+      }
       // El servidor se cierra antes de responder; ignorar error de red
     }
     // Intentar cerrar la pestaña; si el navegador lo bloquea, mostrar aviso
     window.close()
+  }
+
+  if (error) {
+    return (
+      <div className={variant === 'sidebar' ? 'px-4 py-3 text-xs text-mgd-100' : 'text-sm text-red-600'}>
+        <p className="mb-2">{error}</p>
+        <button
+          onClick={() => setError(null)}
+          className={`text-xs px-2 py-1 rounded ${variant === 'sidebar' ? 'bg-mgd-800 text-mgd-100' : 'bg-gray-200 text-gray-700'}`}
+        >
+          Volver
+        </button>
+      </div>
+    )
   }
 
   if (apagando) {

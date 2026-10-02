@@ -764,6 +764,26 @@ def test_operador_no_shutdown(env):
     assert _post(env, "op_global", "/api/shutdown", {}).status_code == 403
 
 
+# ── NUE-001 (v1.13.09) SHUTDOWN SOLO ADMIN GLOBAL ────────────────────────────
+
+def test_nue001_admin_con_empresa_no_apaga(env, monkeypatch):
+    """NUE-001: el admin de empresa 1 no debe poder apagar el servidor (403)."""
+    monkeypatch.setenv("KRITERIO_NO_SHUTDOWN", "1")
+    r = _post(env, "admin_emp1", "/api/shutdown", {})
+    assert r.status_code == 403, (
+        f"admin con empresa apagó el servidor (HTTP {r.status_code}) — NUE-001 regresada"
+    )
+    assert "global" in r.json()["detail"].lower()
+
+
+def test_nue001_admin_global_si_apaga(env, monkeypatch):
+    """NUE-001: el admin global (empresa NULL) sigue pudiendo apagar (200)."""
+    monkeypatch.setenv("KRITERIO_NO_SHUTDOWN", "1")
+    r = _post(env, "admin_global", "/api/shutdown", {})
+    assert r.status_code == 200, f"admin global no pudo apagar: {r.status_code}"
+    assert r.json()["ok"] is True
+
+
 def test_solo_lectura_y_operador_no_restauran_backup(env):
     for who in ("ro_emp1", "op_global"):
         assert _post(env, who, "/api/ajustes/restaurar", {}).status_code == 403

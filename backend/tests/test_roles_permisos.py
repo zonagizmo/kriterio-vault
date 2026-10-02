@@ -269,10 +269,33 @@ class TestAdmin:
                        headers=h(admin_token))
         assert r.status_code == 200
 
-    def test_shutdown_admin(self, client, admin_token, monkeypatch):
+    def test_shutdown_admin(self, client, admin_user, admin_token, monkeypatch):
+        # El fixture admin_user es global (empresa_id NULL): es el único perfil
+        # que puede apagar el servidor (NUE-001). La env var evita el SIGTERM.
+        assert admin_user.empresa_id is None
         monkeypatch.setenv("KRITERIO_NO_SHUTDOWN", "1")
         r = client.post("/api/shutdown", headers=h(admin_token))
         assert r.status_code == 200
+
+    def test_shutdown_admin_con_empresa_403(self, client, db_session, monkeypatch):
+        """NUE-001: un admin con empresa asignada no apaga el servidor global."""
+        monkeypatch.setenv("KRITERIO_NO_SHUTDOWN", "1")
+        admin_emp = UsuarioSistema(
+            username="admin_emp1", password_hash=hash_password("admin123"),
+            nombre="Admin Empresa 1", rol="admin", activo=True, empresa_id=1,
+        )
+        db_session.add(admin_emp)
+        db_session.commit()
+        db_session.refresh(admin_emp)
+        token = create_access_token({"sub": admin_emp.id, "rol": admin_emp.rol})
+
+        r = client.post("/api/shutdown", headers=h(token))
+        assert r.status_code == 403, r.text
+        assert "global" in r.json()["detail"].lower()
+
+    def test_shutdown_sin_token_401(self, client):
+        r = client.post("/api/shutdown")
+        assert r.status_code == 401
 
     def test_diagnostico(self, client, admin_token):
         r = client.get("/api/contabilidad/diagnostico", params={"empresa_id": 1},

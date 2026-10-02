@@ -17,12 +17,12 @@ from app.api.dashboard import router as dashboard_router
 from app.api.estadisticas import router as estadisticas_router
 from app.api.ajustes import router as ajustes_router, iniciar_scheduler, detener_scheduler
 from app.api.health import router as health_router
-from app.services.permissions import require_admin
+from app.services.permissions import require_admin_global
 import app.db.decimal_adapter  # registra adaptador Decimal para SQLite
 import app.models.usuarios  # registra tablas usuarios_nna, pagas_nna y usuarios_sistema
 import app.models.sync  # registra tabla sync_log
 
-VERSION = "1.13.07"
+VERSION = "1.13.09"
 
 
 def _migrar_usuarios_sistema():
@@ -203,11 +203,12 @@ async def _apagar():
 
 
 @app.post("/api/shutdown")
-async def shutdown(background_tasks: BackgroundTasks, _user=Depends(require_admin)):
-    """Apaga el servidor. Solo admin (403 para el resto, 401 sin sesión).
+async def shutdown(background_tasks: BackgroundTasks, _user=Depends(require_admin_global)):
+    """Apaga el servidor. Solo administrador global (empresa_id NULL).
 
-    KRITERIO_NO_SHUTDOWN=1 desactiva la parada real (tests): responde igual
-    pero no mata el proceso.
+    403 para admin con empresa asignada y para no-admin (NUE-001), 401 sin
+    sesión. KRITERIO_NO_SHUTDOWN=1 desactiva la parada real (tests): responde
+    igual pero no mata el proceso.
     """
     if os.getenv("KRITERIO_NO_SHUTDOWN"):
         return {"ok": True, "aviso": "shutdown deshabilitado por KRITERIO_NO_SHUTDOWN"}

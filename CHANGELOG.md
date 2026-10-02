@@ -5,6 +5,53 @@ Formato de versión: **X.XX.XX** (se muestra como X.X.X eliminando ceros inicial
 - **XX** — nueva funcionalidad o módulo
 - **XX** — corrección de bugs y ajustes menores
 
+## [1.13.09] — 2026-10-02 — NUE-001: shutdown solo administrador global
+
+> **Bump de versión**: `backend/app/main.py` y `frontend/src/version.js`
+> pasan de 1.13.08 a **1.13.09**. La release 1.13.08 queda solo con el fix
+> de P&G.
+
+### Corregido
+- **NUE-001 (auditoría 1.13.08)** — `POST /api/shutdown` usaba `require_admin`
+  y **cualquier admin** podía apagar el servidor de **todas** las empresas (DoS
+  global): un admin con empresa asignada recibía 200 y el backend lanzaba
+  SIGTERM al proceso. Ahora exige **administrador global**
+  (`require_admin_global`: permiso `admin` + `empresa_id NULL`) → 403 con
+  "Solo un administrador global puede realizar esta operación" en caso
+  contrario (mismo patrón que D-03, v1.13.07). `app/services/permissions.py`,
+  `app/main.py`.
+- **Frontend**: `BotonApagar` no se muestra a un admin con empresa asignada
+  (ni a operador/solo_lectura) y, si el backend devuelve 403, muestra el
+  mensaje de error en lugar de "Servidor detenido" (antes el `catch` era
+  silencioso y cerraba la pestaña como si hubiera apagado). `api.js` expone
+  ahora `error.status` (aditivo, no cambia `.message`).
+
+### Tests
+- Backend: `test_shutdown_admin_con_empresa_403` y `test_shutdown_sin_token_401`
+  (`test_roles_permisos.py`); `test_nue001_admin_con_empresa_no_apaga` y
+  `test_nue001_admin_global_si_apaga` (`test_auditoria_expectativas.py`,
+  espejo de los de D-03). El test de 200 siempre fija
+  `KRITERIO_NO_SHUTDOWN=1`: sin la env var, `/api/shutdown` manda SIGTERM al
+  propio pytest.
+- Frontend: admin global ve y usa el botón (200); admin con empresa no lo ve;
+  403 del backend → mensaje de error y `window.close()` no llamado
+  (`components-layout.test.jsx`; `window.close` se espía porque en jsdom
+  cierra la ventana de pruebas).
+
+### Verificación
+- Backend: **284 passed**; frontend: **134 passed**, ESLint 0 errores
+  (29 warnings preexistentes), Prettier OK.
+- Reproducción dinámica: `admin_emp1 → 403`, `admin_global → 200` (con env var),
+  operador/solo_lectura → 403, sin token → 401.
+
+### Impacto
+- **API**: `POST /api/shutdown` pasa de 200 a 403 para admins con empresa
+  asignada (en esta instalación no hay ninguno: el único admin es global).
+  **Base de datos**: sin cambios. **Frontend**: el botón "Apagar" desaparece
+  para admins de empresa.
+
+---
+
 ## [1.13.08] — 2026-09-29 — Fix P&G: 500 por Decimal + fallo mudo en la UI
 
 ### Corregido

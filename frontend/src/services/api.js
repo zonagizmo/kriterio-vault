@@ -29,6 +29,10 @@ api.interceptors.response.use(
     const msg = (typeof detail === 'string' ? detail : detail?.mensaje) || err.message || 'Error de red'
     const error = new Error(msg)
     if (detail && typeof detail === 'object') error.detail = detail
+    // Estado HTTP accesible para quien quiera distinguir un 403 de un fallo
+    // de red (p. ej. BotonApagar); no cambia .message, que es lo que usan
+    // el resto de los catch.
+    error.status = err.response?.status
     return Promise.reject(error)
   },
 )

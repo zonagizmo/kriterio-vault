@@ -115,6 +115,23 @@ require_configuration = require_permiso("configuration")
 require_sync = require_permiso("sync")
 require_authenticated = get_current_user  # solo exige sesión válida (401)
 
+
+def require_admin_global(user: UsuarioSistema = Depends(get_current_user)) -> UsuarioSistema:
+    """Admin con `empresa_id NULL`: permiso `admin` + alcance global.
+
+    NUE-001 (v1.13.09): `require_admin` alcanza a cualquier admin, también al
+    de una sola empresa, y operaciones globales (p. ej. apagar el servidor)
+    afectan a todas las empresas. 401 sin sesión, 403 si no es admin o si
+    tiene empresa asignada (mismo patrón que D-03 en `api/empresas.py`).
+    """
+    requiere_permiso(user, "admin")
+    if getattr(user, "empresa_id", None) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador global puede realizar esta operación",
+        )
+    return user
+
 # ── Autorización derivada del método HTTP (política por defecto) ────────────
 
 METHOD_PERMISSION = {

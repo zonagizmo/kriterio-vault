@@ -73,7 +73,7 @@ Clasificación de los 135 endpoints (auditoría completa, sin sin clasificar):
 | Grupo | Nº | Protección |
 |-------|---:|------------|
 | CRUD por método HTTP (12 routers: albaranes, artículos, bancos, clientes, contabilidad, dashboard, estadísticas, extras, facturas, familias, proveedores, usuarios NNA/pagas) | 109 | `require_method_permission`: GET→`read`, POST→`create`, PUT/PATCH→`update`, DELETE→`delete` |
-| Administrativos (backups, restaurar, ajustes, empresas escritura, usuarios sistema, sync, shutdown, diagnóstico) | 22 | Permisos explícitos: `backup`, `restore`, `configuration`, `user_management`, `sync`, `admin` |
+| Administrativos (backups, restaurar, ajustes, empresas escritura, usuarios sistema, sync, shutdown, diagnóstico) | 22 | Permisos explícitos: `backup`, `restore`, `configuration`, `user_management`, `sync`, `admin` (en `shutdown`: `admin` **global**) |
 | Solo autenticación (`GET /me`, `cambiar-password`, `GET /empresas` con filtro) | 4 | `get_current_user` (401 si no autenticado) |
 | Públicos (`POST /auth/login`, `POST /sync/push` con API-key, `GET /health`, `GET /`, `GET /api/version`) | 5 | Sin JWT (ver §6) |
 
@@ -109,8 +109,12 @@ Detalle por recurso:
   edita/borra si pertenece a esa empresa (SYNC-001/002/003).
 - **`/api/contabilidad/diagnostico`** → `read` (desde v1.13.01: el operador
   también diagnostica; los POST de reparación/generación/cierre exigen `create`).
-- **`POST /api/shutdown`** → `admin` + `KRITERIO_NO_SHUTDOWN=1` desactiva la
-  parada real (usado por los tests).
+- **`POST /api/shutdown`** → **admin global** (`require_admin_global`: permiso
+  `admin` **y** `empresa_id NULL`). **NUE-001 (v1.13.09)**: antes valía
+  `require_admin` y cualquier admin de una empresa podía parar el servidor de
+  **todas** las empresas (DoS global); ahora un admin con empresa asignada
+  recibe 403 (mismo patrón que D-03). El frontend oculta el botón "Apagar" en
+  el mismo caso. `KRITERIO_NO_SHUTDOWN=1` desactiva la parada real (tests).
 
 ---
 
